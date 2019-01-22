@@ -16,13 +16,13 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/proxy"
 
 	"github.com/artyom/autoflags"
-)
+	"runtime"
+	)
 
 func main() {
 	defaultUser := os.Getenv("MOSH_USER")
@@ -67,32 +67,67 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	newEnv := append([]string{}, os.Environ()...)
-	newEnv = append(newEnv, "MOSH_KEY="+key)
-	log.Fatal(syscall.Exec(clientPath, []string{"mosh-client", ips[0].String(), strconv.Itoa(port)}, newEnv))
+
+	os.Setenv("MOSH_KEY", key)
+	os.Setenv("MOSH_PREDICTION_DISPLAY", "adaptive")
+
+	args := []string{clientPath, ips[0].String(), strconv.Itoa(port)}
+
+	if runtime.GOOS == "windows" {
+		attrs := &os.ProcAttr{
+			Env: os.Environ(),
+			Files: []*os.File {
+				os.Stdin,
+				os.Stdout,
+				os.Stderr,
+			},
+		}
+
+		process, err := os.StartProcess(clientPath, args, attrs)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = process.Wait()
+		if err != nil {
+			log.Print(err)
+		}
+	} else {
+		log.Fatal(syscall.Exec(clientPath, args, os.Environ()))
+	}
 }
 
 func runServer(addr, login, moshPorts string, port int, tout time.Duration) (int, string, error) {
-	hostKeyCallback, err := knownhosts.New(os.ExpandEnv("$HOME/.ssh/known_hosts"))
-	if err != nil {
-		return 0, "", err
-	}
-	var sshAgent agent.Agent
-	agentConn, err := net.DialTimeout("unix", os.Getenv("SSH_AUTH_SOCK"), tout)
-	if err != nil {
-		return 0, "", err
-	}
-	sshAgent = agent.NewClient(agentConn)
-	defer agentConn.Close()
 
-	signers, err := sshAgent.Signers()
+	var knownHostsFile string
+	if runtime.GOOS == "windows" {
+		knownHostsFile = os.ExpandEnv("$USERPROFILE/.ssh/known_hosts")
+	} else {
+		knownHostsFile = os.ExpandEnv("$HOME/.ssh/known_hosts")
+	}
+	hostKeyCallback, err := knownhosts.New(knownHostsFile)
 	if err != nil {
 		return 0, "", err
 	}
+	//var sshAgent agent.Agent
+	//agentConn, err := net.DialTimeout("unix", os.Getenv("SSH_AUTH_SOCK"), tout)
+	//if err != nil {
+	//	return 0, "", err
+	//}
+	//sshAgent = agent.NewClient(agentConn)
+	//defer agentConn.Close()
+
+	//signers, err := sshAgent.Signers()
+	//if err != nil {
+	//	return 0, "", err
+	//}
 	sshConfig := &ssh.ClientConfig{
 		User: login,
-		Auth: []ssh.AuthMethod{ssh.PublicKeys(signers...),
-			ssh.KeyboardInteractive(keyboardChallenge)},
+		Auth: []ssh.AuthMethod{
+			//ssh.PublicKeys(signers...),
+			ssh.PasswordCallback(passwordCallback),
+			ssh.KeyboardInteractive(keyboardChallenge),
+		},
 		HostKeyCallback: hostKeyCallback,
 	}
 	client, err := sshDial("tcp", net.JoinHostPort(addr, strconv.Itoa(port)), sshConfig)
@@ -177,4 +212,15 @@ func keyboardChallenge(user, instruction string, questions []string, echos []boo
 		log.Println(instruction)
 	}
 	return nil, nil
+}
+
+func passwordCallback() (secret string, err error) {
+	fmt.Print("Enter password: ")
+
+	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytePassword), nil
 }
