@@ -22,7 +22,8 @@ import (
 
 	"github.com/artyom/autoflags"
 	"runtime"
-	)
+	"path/filepath"
+)
 
 func main() {
 	defaultUser := os.Getenv("MOSH_USER")
@@ -74,6 +75,14 @@ func main() {
 	args := []string{clientPath, ips[0].String(), strconv.Itoa(port)}
 
 	if runtime.GOOS == "windows" {
+		pathToExecutable, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Point to our own TERMINFO database to make the mosh_client working
+		os.Setenv("TERMINFO", filepath.Join(filepath.Dir(pathToExecutable), "terminfo"))
+
 		attrs := &os.ProcAttr{
 			Env: os.Environ(),
 			Files: []*os.File {
