@@ -59,11 +59,6 @@ func main() {
 	if len(ips) == 0 {
 		log.Fatalf("name %q resolved to %v", addr, ips)
 	}
-	clientPath, err := exec.LookPath("mosh-client")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	port, key, err := runServer(addr, params.Login, params.MoshPorts, params.SSHPort, params.Timeout)
 	if err != nil {
 		log.Fatal(err)
@@ -72,16 +67,17 @@ func main() {
 	os.Setenv("MOSH_KEY", key)
 	os.Setenv("MOSH_PREDICTION_DISPLAY", "adaptive")
 
-	args := []string{clientPath, ips[0].String(), strconv.Itoa(port)}
 
 	if runtime.GOOS == "windows" {
-		pathToExecutable, err := os.Executable()
+		executableFullPathName, err := os.Executable()
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		pathToExecutable := filepath.Dir(executableFullPathName)
+
 		// Point to our own TERMINFO database to make the mosh_client working
-		os.Setenv("TERMINFO", filepath.Join(filepath.Dir(pathToExecutable), "terminfo"))
+		os.Setenv("TERMINFO", filepath.Join(pathToExecutable, "terminfo"))
 
 		attrs := &os.ProcAttr{
 			Env: os.Environ(),
@@ -92,7 +88,8 @@ func main() {
 			},
 		}
 
-		process, err := os.StartProcess(clientPath, args, attrs)
+		moshClientFullPathName := filepath.Join(pathToExecutable, "mosh-client.exe")
+		process, err := os.StartProcess(moshClientFullPathName, []string{moshClientFullPathName, ips[0].String(), strconv.Itoa(port)}, attrs)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -102,7 +99,12 @@ func main() {
 			log.Print(err)
 		}
 	} else {
-		log.Fatal(syscall.Exec(clientPath, args, os.Environ()))
+		clientPath, err := exec.LookPath("mosh-client")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Fatal(syscall.Exec(clientPath, []string{clientPath, ips[0].String(), strconv.Itoa(port)}, os.Environ()))
 	}
 }
 
