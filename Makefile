@@ -1,6 +1,11 @@
+.PHONY: generate-mosh-protobufs
+generate-mosh-protobufs:
+	C:/work/protobuf/prot1/protobuf/build_mingw/bin/protoc --cpp_out=. userinput.proto hostinput.proto transportinstruction.proto
+
+
 .PHONY: mosh-client
 mosh-client:
-	g++ -shared -o test.so client/mosh-client/mosh-client.cpp \
+	g++ -o test-mosh.exe client/mosh-client/mosh-client.cpp \
 		               client/mosh-client/stmclient.cpp \
 			       client/mosh-client/terminaloverlay.cpp \
 			       client/mosh-client/crypto/crypto.cc \
@@ -35,4 +40,5 @@ mosh-client:
 	    -I client/mosh-client/network \
 	    -I client/mosh-client/crypto \
 	    -I client/mosh-client/protobufs \
-	    -I C:/work/CPPRestSDK/vcpkg/packages/openssl-windows_x86-windows/include
+	    -I C:/Users/max/Downloads/openssl-1.1.1b-win64-mingw/openssl-1.1.1b-win64-mingw/include \
+	                       -L libs -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz
