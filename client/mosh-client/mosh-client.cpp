@@ -75,6 +75,15 @@ int mosh_main( int argc, char *argv[] )
 int main( int argc, char *argv[] )
 #endif
 {
+  HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+  DWORD dwMode;
+  GetConsoleMode(hOutput, &dwMode);
+  dwMode |= 0x0004 | 0x0008;
+  if (!SetConsoleMode(hOutput, dwMode)) {
+      fatal_assert(true);
+      exit(1);
+  }
+
   unsigned int verbose = 0;
   /* For security, make sure we don't dump core */
   Crypto::disable_dumping_core();

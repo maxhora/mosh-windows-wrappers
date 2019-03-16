@@ -169,7 +169,7 @@
 #define HAVE_POSIX_MEMALIGN 0
 
 /* Define to 1 if you have the `pselect' function. */
-#define HAVE_PSELECT 1
+#undef HAVE_PSELECT
 
 /* Define to 1 if you have the <pty.h> header file. */
 #define HAVE_PTY_H 0

@@ -46,3 +46,12 @@ void Select::handle_signal( int signum )
   Select &sel = get_instance();
   sel.got_signal[ signum ] = 1;
 }
+
+int
+w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
+{
+    /* this is only used by sshd to block SIGCHLD while doing waitpid() */
+    /* our implementation of waidpid() is never interrupted, so no need to implement this for now*/
+    //debug3("sigprocmask() how:%d", how);
+    return 0;
+}

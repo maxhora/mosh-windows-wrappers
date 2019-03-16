@@ -58,7 +58,7 @@
 #include "fatal_assert.h"
 #include "locale_utils.h"
 #include "pty_compat.h"
-//#include "select.h"
+#include "select.h"
 #include "timestamp.h"
 
 #include "networktransport-impl.h"
@@ -82,7 +82,7 @@ void STMClient::resume( void )
 
 void STMClient::init( void )
 {
-  if ( !is_utf8_locale() ) {
+  /*if ( !is_utf8_locale() ) {
     LocaleVar native_ctype = get_ctype();
     string native_charset( locale_charset() );
 
@@ -92,7 +92,7 @@ void STMClient::init( void )
 	     native_ctype.str().c_str(), native_charset.c_str() );
     int unused __attribute((unused)) = system( "locale" );
     exit( 1 );
-  }
+  }*/
 
   /* Verify terminal configuration */
   //if ( tcgetattr( STDIN_FILENO, &saved_termios ) < 0 ) {
@@ -227,12 +227,12 @@ void STMClient::shutdown( void )
 
 void STMClient::main_init( void )
 {
-  //Select &sel = Select::get_instance();
-  //sel.add_signal( SIGWINCH );
-  //sel.add_signal( SIGTERM );
-  //sel.add_signal( SIGINT );
-  //sel.add_signal( SIGHUP );
-  //sel.add_signal( SIGPIPE );
+  Select &sel = Select::get_instance();
+  sel.add_signal( SIGWINCH );
+  sel.add_signal( SIGTERM );
+  sel.add_signal( SIGINT );
+  sel.add_signal( SIGHUP );
+  sel.add_signal( SIGPIPE );
   //sel.add_signal( SIGCONT );
 
   /* get initial window size */
@@ -243,10 +243,13 @@ void STMClient::main_init( void )
 
   int result = GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &window_size);
   if (!result) {
+      DWORD errorCode = GetLastError();
+      int test = 1;
+      int test2 = test;
       return;
   }
 
-  //window_size.ws_col = window_size.ws_col - 1;
+  window_size.dwSize.Y = 30;
 
   /* local state */
   local_framebuffer = Terminal::Framebuffer( window_size.dwSize.X, window_size.dwSize.Y );
@@ -268,7 +271,7 @@ void STMClient::main_init( void )
 
   /* be noisy as necessary */
   network->set_verbose( verbose );
-  //Select::set_verbose( verbose );
+  Select::set_verbose( verbose );
 }
 
 void STMClient::output_new_frame( void )
@@ -444,7 +447,7 @@ bool STMClient::main( void )
 #endif
 
   /* prepare to poll for events */
-  //Select &sel = Select::get_instance();
+  Select &sel = Select::get_instance();
 
   while ( 1 ) {
     try {
@@ -454,60 +457,60 @@ bool STMClient::main( void )
 
       /* Handle startup "Connecting..." message */
       if ( still_connecting() ) {
-	wait_time = std::min( 250, wait_time );
+          wait_time = std::min( 250, wait_time );
       }
 
       /* poll for events */
       /* network->fd() can in theory change over time */
-      //sel.clear_fds();
+      sel.clear_fds();
       std::vector< int > fd_list( network->fds() );
       for ( std::vector< int >::const_iterator it = fd_list.begin();
-	    it != fd_list.end();
-	    it++ ) {
-	//sel.add_fd( *it );
+        it != fd_list.end();
+        it++ ) {
+        sel.add_fd( *it );
       }
       //sel.add_fd( STDIN_FILENO );
 
-      //int active_fds = sel.select( wait_time );
-      //if ( active_fds < 0 ) {
-	//perror( "select" );
-	//break;
-      //}
+      int active_fds = sel.select( wait_time );
+      if ( active_fds < 0 ) {
+        perror( "select" );
+        break;
+      }
 
       bool network_ready_to_read = false;
 
       for ( std::vector< int >::const_iterator it = fd_list.begin();
-	    it != fd_list.end();
-	    it++ ) {
-	//if ( sel.read( *it ) ) {
-	  /* packet received from the network */
-	  /* we only read one socket each run */
-	//  network_ready_to_read = true;
-	//}
+        it != fd_list.end();
+        it++ ) {
+        if ( sel.read( *it ) ) {
+          /* packet received from the network */
+          /* we only read one socket each run */
+          network_ready_to_read = true;
+        }
       }
 
       if ( network_ready_to_read ) {
-	process_network_input();
+        process_network_input();
       }
     
-      //if ( sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO ) ) { /* input from the user needs to be fed to the network */
-	//if ( !network->has_remote_addr() ) {
-	//  break;
-	//} else if ( !network->shutdown_in_progress() ) {
-	//  overlays.get_notification_engine().set_notification_string( wstring( L"Exiting..." ), true );
-	//  network->start_shutdown();
-	//}
-    //  }
+      /*if ( sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO ) ) { // input from the user needs to be fed to the network
+        if ( !network->has_remote_addr() ) {
+          break;
+        } else if ( !network->shutdown_in_progress() ) {
+          overlays.get_notification_engine().set_notification_string( wstring( L"Exiting..." ), true );
+          network->start_shutdown();
+        }
+      }*/
 
-    //  if ( sel.signal( SIGWINCH ) && !process_resize() ) { /* resize */
-	//return false;
-    //  }
+      if ( sel.signal( SIGWINCH ) && !process_resize() ) { /* resize */
+        return false;
+      }
 
-    //  if ( sel.signal( SIGCONT ) ) {
-	//resume();
-    //  }
+      /*if ( sel.signal( SIGCONT ) ) {
+        resume();
+      }*/
 
-      /*if ( sel.signal( SIGTERM )
+      if ( sel.signal( SIGTERM )
            || sel.signal( SIGINT )
            || sel.signal( SIGHUP )
            || sel.signal( SIGPIPE ) ) {
@@ -518,7 +521,7 @@ bool STMClient::main( void )
           overlays.get_notification_engine().set_notification_string( wstring( L"Signal received, shutting down..." ), true );
           network->start_shutdown();
         }
-      }*/
+      }
 
       /* quit if our shutdown has been acknowledged */
       if ( network->shutdown_in_progress() && network->shutdown_acknowledged() ) {

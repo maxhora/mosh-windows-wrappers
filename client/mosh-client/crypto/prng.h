@@ -39,6 +39,8 @@
 
 #include "crypto.h"
 
+#include <random>
+
 /* Read random bytes from /dev/urandom.
 
    We rely on stdio buffering for efficiency. */
@@ -49,24 +51,30 @@ using namespace Crypto;
 
 class PRNG {
  private:
-  std::ifstream randfile;
+  //std::ifstream randfile;
+    std::mt19937 rng;
 
   /* unimplemented to satisfy -Weffc++ */
   PRNG( const PRNG & );
   PRNG & operator=( const PRNG & );
 
  public:
-  PRNG() : randfile( rdev, std::ifstream::in | std::ifstream::binary ) {}
+  PRNG() /*: randfile( rdev, std::ifstream::in | std::ifstream::binary )*/ {}
 
   void fill( void *dest, size_t size ) {
     if ( 0 == size ) {
       return;
     }
 
-    randfile.read( static_cast<char *>( dest ), size );
-    if ( !randfile ) {
-      throw CryptoException( "Could not read from " + std::string( rdev ) );
+    std::uniform_int_distribution<int> dist(0, UINT8_MAX);
+    for (size_t i = 0; i < size; ++i) {
+        ((char*)dest)[i] = dist(rng);
     }
+
+    //randfile.read( static_cast<char *>( dest ), size );
+    //if ( !randfile ) {
+    //  throw CryptoException( "Could not read from " + std::string( rdev ) );
+    //}
   }
 
   uint8_t uint8() {

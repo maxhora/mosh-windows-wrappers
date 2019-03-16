@@ -179,6 +179,10 @@ namespace Terminal {
       size_t ignore = wcrtomb(NULL, 0, &ps);
       (void)ignore;
       size_t len = wcrtomb(tmp, c, &ps);
+      if (len == static_cast<std::size_t>(-1)) {
+          // TODO: strange failure
+          return;
+      }
       contents.insert( contents.end(), tmp, tmp+len );
     }
 

@@ -36,11 +36,58 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#include <sys/select.h>
+//#include <sys/select.h>
+#include <sys/types.h>
+#include <winsock2.h>
 #include <assert.h>
 
 #include "fatal_assert.h"
 #include "timestamp.h"
+
+/* signal related defs*/
+/* supported signal types */
+#define W32_SIGINT		0
+#define W32_SIGSEGV		1
+
+#define W32_SIGPIPE		2
+#define W32_SIGCHLD		3
+#define W32_SIGALRM		4
+#define W32_SIGTSTP		5
+
+#define W32_SIGHUP		6
+#define W32_SIGQUIT		7
+#define W32_SIGTERM		8
+#define W32_SIGTTIN		9
+#define W32_SIGTTOU		10
+#define W32_SIGWINCH	        11
+
+/* singprocmask "how" codes*/
+#define SIG_BLOCK		0
+#define SIG_UNBLOCK		1
+#define SIG_SETMASK		2
+
+typedef void(*sighandler_t)(int);
+typedef int sigset_t;
+#define sigemptyset(set) (memset( (set), 0, sizeof(sigset_t)))
+#define sigaddset(set, sig) ( (*(set)) |= (0x80000000 >> (sig)))
+#define sigismember(set, sig) ( (*(set) & (0x80000000 >> (sig)))?1:0 )
+#define sigdelset(set, sig) ( (*(set)) &= (~( 0x80000000 >> (sig)) ) )
+
+int w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+#define sigprocmask(a,b,c) w32_sigprocmask((a), (b), (c))
+
+#define SIGINT	W32_SIGINT
+#define SIGSEGV	W32_SIGSEGV
+#define SIGPIPE	W32_SIGPIPE
+#define SIGCHLD	W32_SIGCHLD
+#define SIGALRM	W32_SIGALRM
+#define SIGTSTP	W32_SIGTSTP
+#define SIGHUP	W32_SIGHUP
+#define SIGQUIT	W32_SIGQUIT
+#define SIGTERM	W32_SIGTERM
+#define SIGTTIN	W32_SIGTTIN
+#define SIGTTOU	W32_SIGTTOU
+#define SIGWINCH W32_SIGWINCH
 
 /* Convenience wrapper for pselect(2).
 
@@ -69,7 +116,7 @@ private:
     FD_ZERO( &read_fds );
 
     clear_got_signal();
-    fatal_assert( 0 == sigemptyset( &empty_sigset ) );
+    sigemptyset( &empty_sigset );//fatal_assert( 0 == sigemptyset( &empty_sigset ) );
   }
 
   void clear_got_signal( void )
@@ -106,17 +153,17 @@ public:
 
     /* Block the signal so we don't get it outside of pselect(). */
     sigset_t to_block;
-    fatal_assert( 0 == sigemptyset( &to_block ) );
-    fatal_assert( 0 == sigaddset( &to_block, signum ) );
-    fatal_assert( 0 == sigprocmask( SIG_BLOCK, &to_block, NULL ) );
+    sigemptyset( &to_block ); //fatal_assert( 0 == sigemptyset( &to_block ) );
+    sigaddset( &to_block, signum ); //fatal_assert( 0 == sigaddset( &to_block, signum ) );
+    sigprocmask( SIG_BLOCK, &to_block, NULL ); //fatal_assert( 0 == sigprocmask( SIG_BLOCK, &to_block, NULL ) );
 
     /* Register a handler, which will only be called when pselect()
        is interrupted by a (possibly queued) signal. */
-    struct sigaction sa;
+    /*struct sigaction sa;
     sa.sa_flags = 0;
     sa.sa_handler = &handle_signal;
     fatal_assert( 0 == sigfillset( &sa.sa_mask ) );
-    fatal_assert( 0 == sigaction( signum, &sa, NULL ) );
+    fatal_assert( 0 == sigaction( signum, &sa, NULL ) );*/
   }
 
   /* timeout unit: milliseconds; negative timeout means wait forever */
@@ -166,6 +213,11 @@ public:
     int ret = sigprocmask( SIG_SETMASK, &empty_sigset, &old_sigset );
     if ( ret != -1 ) {
       ret = ::select( max_fd + 1, &read_fds, NULL, NULL, tvp );
+      if (ret == -1) {
+          int errorNr = WSAGetLastError();
+          char* errorStr = strerror(errorNr);
+          return ret;
+      }
       sigprocmask( SIG_SETMASK, &old_sigset, NULL );
     }
 #endif

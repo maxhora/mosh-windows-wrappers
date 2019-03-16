@@ -32,10 +32,9 @@
 
 #include "config.h"
 
-#include <sys/types.h>
+//#include <sys/types.h>
 //#include <sys/socket.h>
-#include "winsock2.h"
-#include "windows.h"
+
 //#ifdef HAVE_SYS_UIO_H
 //#include <sys/uio.h>
 //#endif
@@ -53,6 +52,11 @@
 #include "crypto.h"
 
 #include "timestamp.h"
+
+//#include "winsock2.h"
+#include "windows.h"
+
+#include <io.h>
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0
@@ -153,7 +157,7 @@ void Connection::prune_sockets( void )
 Connection::Socket::Socket( int family )
   : _fd( socket( family, SOCK_DGRAM, 0 ) )
 {
-  if ( _fd < 0 ) {
+  if (_fd == INVALID_SOCKET)  {
     throw NetworkException( "socket", errno );
   }
 
@@ -168,7 +172,7 @@ Connection::Socket::Socket( int family )
   //  int dscp = 0x92; /* OS X does not have IPTOS_DSCP_AF42 constant */
   int dscp = 0x02; /* ECN-capable transport only */
   if ( setsockopt( _fd, IPPROTO_IP, IP_TOS, (const char*)&dscp, sizeof dscp ) < 0 ) {
-    //    perror( "setsockopt( IP_TOS )" );
+        perror( "setsockopt( IP_TOS )" );
   }
 
   /* request explicit congestion notification on received datagrams */
@@ -213,13 +217,22 @@ void Connection::set_MTU( int family )
   }
 }
 
+/* called before any other calls to socketio_ functions */
+int
+socketio_initialize()
+{
+    WSADATA wsaData = { 0 };
+    return WSAStartup(MAKEWORD(2, 2), &wsaData);
+}
+
 class AddrInfo {
 public:
   struct addrinfo *res;
   AddrInfo( const char *node, const char *service,
 	    const struct addrinfo *hints ) :
     res( NULL ) {
-    int errcode = getaddrinfo( node, service, hints, &res );
+    int errcode = socketio_initialize();
+    errcode = getaddrinfo( node, service, hints, &res );
     if ( errcode != 0 ) {
       throw NetworkException( std::string( "Bad IP address (" ) + (node != NULL ? node : "(null)") + "): " + gai_strerror( errcode ), 0 );
     }
@@ -388,7 +401,8 @@ Connection::Connection( const char *key_str, const char *ip, const char *port ) 
 
   has_remote_addr = true;
 
-  socks.push_back( Socket( remote_addr.sa.sa_family ) );
+  Socket newSock = Socket( remote_addr.sa.sa_family );
+  socks.push_back( newSock );
 
   set_MTU( remote_addr.sa.sa_family );
 }
@@ -636,11 +650,11 @@ uint64_t Connection::timeout( void ) const
 
 Connection::Socket::~Socket()
 {
-  fatal_assert ( close( _fd ) == 0 );
+   //close( _fd );//fatal_assert ( close( _fd ) == 0 );
 }
 
 Connection::Socket::Socket( const Socket & other )
-  : _fd( dup( other._fd ) )
+  : _fd( other._fd /*dup( other._fd )*/ )
 {
   if ( _fd < 0 ) {
     throw NetworkException( "socket", errno );
@@ -649,6 +663,7 @@ Connection::Socket::Socket( const Socket & other )
 
 Connection::Socket & Connection::Socket::operator=( const Socket & other )
 {
+    //_fd = other._fd;
   if ( dup2( other._fd, _fd ) < 0 ) {
     throw NetworkException( "socket", errno );
   }
