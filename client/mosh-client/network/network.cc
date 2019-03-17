@@ -44,6 +44,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <map>
 
 #include "dos_assert.h"
 #include "fatal_assert.h"
@@ -53,8 +54,9 @@
 
 #include "timestamp.h"
 
-//#include "winsock2.h"
+#include "winsock2.h"
 #include "windows.h"
+#include "mswsock.h"
 
 #include <io.h>
 
@@ -454,12 +456,14 @@ string Connection::recv( void )
     try {
       payload = recv_one( it->fd());
     } catch ( NetworkException & e ) {
-      if ( (e.the_errno == EAGAIN)
+      // TODO(MaxRis): Allow certain socket read failures (error codes between Windows and Linux don't match)
+      /*if ( (e.the_errno == EAGAIN)
 	   || (e.the_errno == EWOULDBLOCK) ) {
 	continue;
       } else {
 	throw;
-      }
+      }*/
+      continue;
     }
 
     /* succeeded */
@@ -469,48 +473,87 @@ string Connection::recv( void )
   throw NetworkException( "No packet received" );
 }
 
+std::map<int, LPFN_WSARECVMSG> recvMsgMap;
+
 string Connection::recv_one( int sock_to_recv )
 {
-return "";
   // receive source address, ECN, and payload in msghdr structure
-  /*Addr packet_remote_addr;
-  struct msghdr header;
-  struct iovec msg_iovec;
+  GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
+  LPFN_WSARECVMSG WSARecvMsg = nullptr;
+  Addr packet_remote_addr;
+  //SOCKADDR packet_remote_addr;
+  //struct msghdr header;
+  //struct iovec msg_iovec;
+  WSAMSG msg;
+  WSABUF WSABuf;
+  DWORD received_length = 0;
+  int nResult = 0;
 
   char msg_payload[ Session::RECEIVE_MTU ];
   char msg_control[ Session::RECEIVE_MTU ];
 
+  WSARecvMsg = recvMsgMap[sock_to_recv];
+  if (!WSARecvMsg) {
+      nResult = WSAIoctl(sock_to_recv, SIO_GET_EXTENSION_FUNCTION_POINTER,
+               &WSARecvMsg_GUID, sizeof WSARecvMsg_GUID,
+               &WSARecvMsg, sizeof WSARecvMsg,
+               &received_length, NULL, NULL);
+      if (nResult == SOCKET_ERROR) {
+          int errorCode = WSAGetLastError();
+          WSARecvMsg = NULL;
+          return "";
+      }
+      recvMsgMap[sock_to_recv] = WSARecvMsg;
+  }
+
   // receive source address
-  header.msg_name = &packet_remote_addr;
-  header.msg_namelen = sizeof packet_remote_addr;
+  //header.msg_name = &packet_remote_addr;
+  //header.msg_namelen = sizeof packet_remote_addr;
+  msg.name = &packet_remote_addr.sa;
+  msg.namelen = sizeof packet_remote_addr.sa;
+  //msg.name = &packet_remote_addr;
+  //msg.namelen = sizeof(SOCKADDR);
 
   // receive payload
-  msg_iovec.iov_base = msg_payload;
-  msg_iovec.iov_len = sizeof msg_payload;
-  header.msg_iov = &msg_iovec;
-  header.msg_iovlen = 1;
+  //msg_iovec.iov_base = msg_payload;
+  //msg_iovec.iov_len = sizeof msg_payload;
+  //header.msg_iov = &msg_iovec;
+  //header.msg_iovlen = 1;
+  WSABuf.buf = msg_payload;
+  WSABuf.len = sizeof msg_payload;
+  msg.lpBuffers = &WSABuf;
+  msg.dwBufferCount = 1;
 
   // receive explicit congestion notification --
-  header.msg_control = msg_control;
-  header.msg_controllen = sizeof msg_control;
+  //header.msg_control = msg_control;
+  //header.msg_controllen = sizeof msg_control;
+  msg.Control.len = sizeof msg_control;
+  msg.Control.buf = msg_control;
 
   // receive flags
-  header.msg_flags = 0;
+  //header.msg_flags = 0;
+  msg.dwFlags = 0;
 
-  ssize_t received_len = recvmsg( sock_to_recv, &header, MSG_DONTWAIT );
+  //ssize_t received_len = recvmsg( sock_to_recv, &header, MSG_DONTWAIT );
+  nResult = WSARecvMsg(sock_to_recv, &msg, &received_length, NULL, NULL);
+  if (nResult == SOCKET_ERROR) {
+      int err = WSAGetLastError();
+      throw NetworkException( "WSARecvMsg", errno );
+      return "";
+  }
 
-  if ( received_len < 0 ) {
+  if ( received_length < 0 ) {
     throw NetworkException( "recvmsg", errno );
   }
 
-  if ( header.msg_flags & MSG_TRUNC ) {
+  if ( msg.dwFlags & MSG_TRUNC ) {
     throw NetworkException( "Received oversize datagram", errno );
   }
 
   // receive ECN
   bool congestion_experienced = false;
 
-  struct cmsghdr *ecn_hdr = CMSG_FIRSTHDR( &header );
+  /*struct cmsghdr *ecn_hdr = CMSG_FIRSTHDR( &header );
   if ( ecn_hdr
        && ecn_hdr->cmsg_level == IPPROTO_IP
        && ( ecn_hdr->cmsg_type == IP_TOS
@@ -523,9 +566,33 @@ return "";
     assert( ecn_octet_p );
 
     congestion_experienced = (*ecn_octet_p & 0x03) == 0x03;
+  }*/
+  WSACMSGHDR *pCMsgHdr = WSA_CMSG_FIRSTHDR(&msg);
+  /*IN_PKTINFO *pPktInfo = nullptr;
+  if (pCMsgHdr) {
+      switch (pCMsgHdr->cmsg_type) {
+          case IP_PKTINFO: {
+
+                  //CSocketAddressIn DestinationAddress;
+                  pPktInfo = (IN_PKTINFO *)WSA_CMSG_DATA(pCMsgHdr);
+                  //DestinationAddress.SetHostAddress(pPktInfo->ipi_addr.S_un.S_addr);
+                  //DestinationAddress.GetAddress(Address);
+                  //cout << "Destination address: " << Address
+                  //    << ", interface index: " << pPktInfo->ipi_ifindex << '\n';
+                  }
+              break;
+          default:
+              //cout << "Unknown message type: " << pCMsgHdr->cmsg_type
+              //    << "; level: " << pCMsgHdr->cmsg_level << '\n';
+              break;
+          }
   }
 
-  Packet p( session.decrypt( msg_payload, received_len ) );
+  if (!pPktInfo) {
+      return "";
+  }*/
+
+  Packet p( session.decrypt( msg_payload, received_length ) );
 
   dos_assert( p.direction == (server ? TO_SERVER : TO_CLIENT) ); // prevent malicious playback to sender --
 
@@ -533,7 +600,7 @@ return "";
     return p.payload;
   }
   expected_receiver_seq = p.seq + 1; // this is security-sensitive because a replay attack could otherwise
-					screw up the timestamp and targeting --
+                    // screw up the timestamp and targeting --
 
   if ( p.timestamp != uint16_t(-1) ) {
     saved_timestamp = p.timestamp;
@@ -573,10 +640,10 @@ return "";
   last_heard = timestamp();
 
   if ( server && // only client can roam --
-       ( remote_addr_len != header.msg_namelen ||
+       ( remote_addr_len != msg.namelen ||
 	 memcmp( &remote_addr, &packet_remote_addr, remote_addr_len ) != 0 ) ) {
     remote_addr = packet_remote_addr;
-    remote_addr_len = header.msg_namelen;
+    remote_addr_len = msg.namelen;
     char host[ NI_MAXHOST ], serv[ NI_MAXSERV ];
     int errcode = getnameinfo( &remote_addr.sa, remote_addr_len,
 			       host, sizeof( host ), serv, sizeof( serv ),
@@ -587,7 +654,7 @@ return "";
     fprintf( stderr, "Server now attached to client at %s:%s\n",
 	     host, serv );
   }
-  return p.payload;*/
+  return p.payload;
 }
 
 std::string Connection::port( void ) const
@@ -650,11 +717,12 @@ uint64_t Connection::timeout( void ) const
 
 Connection::Socket::~Socket()
 {
+    // TODO(MaxRis): fix duplicating failure first
    //close( _fd );//fatal_assert ( close( _fd ) == 0 );
 }
 
 Connection::Socket::Socket( const Socket & other )
-  : _fd( other._fd /*dup( other._fd )*/ )
+  : _fd( other._fd /*dup( other._fd )*/ ) // TODO(MaxRis): dup returns error
 {
   if ( _fd < 0 ) {
     throw NetworkException( "socket", errno );

@@ -15,19 +15,24 @@ Authentication is performed using ssh-agent, its socket is expected to be availa
 
 ### Build Protobuf with MinGW
 
+```cmd
 mkdir mingw_build && cd mingw_build
 cmake -G "MinGW Makefiles" -Dprotobuf_BUILD_SHARED_LIBS=OFF -Dprotobuf_UNICODE=OFF -Dprotobuf_BUILD_TESTS=0 -DCMAKE_INSTALL_PREFIX=./ ../cmake
 mingw32-make -j10 all
 mingw32-make install
+```
 
-### Build ZLin with MinGW
+### Build ZLib with MinGW
 
+```cmd
 mingw32-make.exe -fwin32/Makefile.gcc
-
+```
 
 ### Prebuilt OpenSSL binaries
 
-https://bintray.com/vszakats/generic/download_file?file_path=openssl-1.1.1b-win64-mingw.zip
+```
+Download from https://bintray.com/vszakats/generic/download_file?file_path=openssl-1.1.1b-win64-mingw.zip
+```
 
 
 **LICENSE**: MIT

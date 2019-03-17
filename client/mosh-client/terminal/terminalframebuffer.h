@@ -180,7 +180,7 @@ namespace Terminal {
       (void)ignore;
       size_t len = wcrtomb(tmp, c, &ps);
       if (len == static_cast<std::size_t>(-1)) {
-          // TODO: strange failure
+          // TODO(MaxRis): strange failure
           return;
       }
       contents.insert( contents.end(), tmp, tmp+len );

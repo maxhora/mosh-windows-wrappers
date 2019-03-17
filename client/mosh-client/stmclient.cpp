@@ -249,7 +249,7 @@ void STMClient::main_init( void )
       return;
   }
 
-  window_size.dwSize.Y = 30;
+  //window_size.dwSize.Y = 30;
 
   /* local state */
   local_framebuffer = Terminal::Framebuffer( window_size.dwSize.X, window_size.dwSize.Y );
@@ -316,13 +316,21 @@ bool STMClient::process_user_input( int fd )
   char buf[ buf_size ];
 
   /* fill buffer if possible */
-  ssize_t bytes_read = read( fd, buf, buf_size );
-  if ( bytes_read == 0 ) { /* EOF */
-    return false;
-  } else if ( bytes_read < 0 ) {
-    perror( "read" );
-    return false;
-  }
+  //ssize_t bytes_read = read( fd, buf, buf_size );
+  //if ( bytes_read == 0 ) { /* EOF */
+  //  return false;
+  //} else if ( bytes_read < 0 ) {
+  //  perror( "read" );
+  //  return false;
+  //}
+
+  HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
+  const int BUFFER_LENGTH = 128;
+  INPUT_RECORD inputRecord[BUFFER_LENGTH];
+  DWORD bytes_read = 0;
+
+  if (!ReadConsoleInput(inputHandle, inputRecord, BUFFER_LENGTH, &bytes_read))
+      return false;
 
   NetworkType &net = *network;
 
@@ -338,7 +346,13 @@ bool STMClient::process_user_input( int fd )
   }
 
   for ( int i = 0; i < bytes_read; i++ ) {
-    char the_byte = buf[ i ];
+      if (inputRecord[i].EventType == KEY_EVENT) {
+          // Skip key release events
+          if (inputRecord[i].Event.KeyEvent.bKeyDown == false)
+              continue;
+      }
+
+    char the_byte = inputRecord[i].Event.KeyEvent.uChar.AsciiChar;//buf[ i ];
 
     if ( !paste ) {
       overlays.get_prediction_engine().new_user_byte( the_byte, local_framebuffer );
@@ -346,43 +360,43 @@ bool STMClient::process_user_input( int fd )
 
     if ( quit_sequence_started ) {
       if ( the_byte == '.' ) { /* Quit sequence is Ctrl-^ . */
-	if ( net.has_remote_addr() && (!net.shutdown_in_progress()) ) {
-	  overlays.get_notification_engine().set_notification_string( wstring( L"Exiting on user request..." ), true );
-	  net.start_shutdown();
-	  return true;
-	}
-	return false;
+        if ( net.has_remote_addr() && (!net.shutdown_in_progress()) ) {
+          overlays.get_notification_engine().set_notification_string( wstring( L"Exiting on user request..." ), true );
+          net.start_shutdown();
+          return true;
+        }
+        return false;
       } else if ( the_byte == 0x1a ) { /* Suspend sequence is escape_key Ctrl-Z */
-	/* Restore terminal and terminal-driver state */
-	swrite( STDOUT_FILENO, display.close().c_str() );
+        /* Restore terminal and terminal-driver state */
+        swrite( STDOUT_FILENO, display.close().c_str() );
 
-	//if ( tcsetattr( STDIN_FILENO, TCSANOW, &saved_termios ) < 0 ) {
-	//  perror( "tcsetattr" );
-	//  exit( 1 );
-	//}
+        //if ( tcsetattr( STDIN_FILENO, TCSANOW, &saved_termios ) < 0 ) {
+        //  perror( "tcsetattr" );
+        //  exit( 1 );
+        //}
 
-	fputs( "\n\033[37;44m[mosh is suspended.]\033[m\n", stdout );
+        fputs( "\n\033[37;44m[mosh is suspended.]\033[m\n", stdout );
 
-	fflush( NULL );
+        fflush( NULL );
 
-	/* actually suspend */
-	//kill( 0, SIGSTOP );
+        /* actually suspend */
+        //kill( 0, SIGSTOP );
 
-	resume();
+        resume();
       } else if ( (the_byte == escape_pass_key) || (the_byte == escape_pass_key2) ) {
-	/* Emulation sequence to type escape_key is escape_key +
-	   escape_pass_key (that is escape key without Ctrl) */
-	net.get_current_state().push_back( Parser::UserByte( escape_key ) );
+        /* Emulation sequence to type escape_key is escape_key +
+           escape_pass_key (that is escape key without Ctrl) */
+        net.get_current_state().push_back( Parser::UserByte( escape_key ) );
       } else {
-	/* Escape key followed by anything other than . and ^ gets sent literally */
-	net.get_current_state().push_back( Parser::UserByte( escape_key ) );
-	net.get_current_state().push_back( Parser::UserByte( the_byte ) );	  
+        /* Escape key followed by anything other than . and ^ gets sent literally */
+        net.get_current_state().push_back( Parser::UserByte( escape_key ) );
+        net.get_current_state().push_back( Parser::UserByte( the_byte ) );
       }
 
       quit_sequence_started = false;
 
       if ( overlays.get_notification_engine().get_notification_string() == escape_key_help ) {
-	overlays.get_notification_engine().set_notification_string( L"" );
+        overlays.get_notification_engine().set_notification_string( L"" );
       }
 
       continue;
@@ -449,6 +463,8 @@ bool STMClient::main( void )
   /* prepare to poll for events */
   Select &sel = Select::get_instance();
 
+  HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
+
   while ( 1 ) {
     try {
       output_new_frame();
@@ -470,6 +486,8 @@ bool STMClient::main( void )
         sel.add_fd( *it );
       }
       //sel.add_fd( STDIN_FILENO );
+      DWORD inputEventCount = 0;
+      GetNumberOfConsoleInputEvents(inputHandle, &inputEventCount);
 
       int active_fds = sel.select( wait_time );
       if ( active_fds < 0 ) {
@@ -493,14 +511,14 @@ bool STMClient::main( void )
         process_network_input();
       }
     
-      /*if ( sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO ) ) { // input from the user needs to be fed to the network
+      if ( inputEventCount && !process_user_input( inputEventCount )/*sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO )*/ ) { // input from the user needs to be fed to the network
         if ( !network->has_remote_addr() ) {
           break;
         } else if ( !network->shutdown_in_progress() ) {
           overlays.get_notification_engine().set_notification_string( wstring( L"Exiting..." ), true );
           network->start_shutdown();
         }
-      }*/
+      }
 
       if ( sel.signal( SIGWINCH ) && !process_resize() ) { /* resize */
         return false;
