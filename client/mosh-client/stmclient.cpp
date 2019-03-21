@@ -354,6 +354,9 @@ bool STMClient::process_user_input( int fd )
 
     char the_byte = inputRecord[i].Event.KeyEvent.uChar.AsciiChar;//buf[ i ];
 
+    if (inputRecord[i].Event.KeyEvent.wVirtualKeyCode == VK_SHIFT)
+        continue;
+
     if ( !paste ) {
       overlays.get_prediction_engine().new_user_byte( the_byte, local_framebuffer );
     }
