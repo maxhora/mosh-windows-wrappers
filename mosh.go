@@ -20,20 +20,31 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/proxy"
 
-	"github.com/artyom/autoflags"
-	"runtime"
 	"path/filepath"
+	"runtime"
+
+	"github.com/artyom/autoflags"
 )
 
-func main() {
+func GetDefaultUser() string {
 	defaultUser := os.Getenv("MOSH_USER")
 	if defaultUser == "" {
 		defaultUser = os.Getenv("USER")
 	}
+	return defaultUser
+}
+
+func GetDefaultPorts() string {
 	defaultPorts := os.Getenv("MOSH_PORTS")
 	if defaultPorts == "" {
 		defaultPorts = "60000:60050"
 	}
+	return defaultPorts
+}
+
+func main() {
+	defaultUser := GetDefaultUser()
+	defaultPorts := GetDefaultPorts()
 	params := struct {
 		SSHPort   int           `flag:"sshport,ssh port to use"`
 		Login     string        `flag:"l,login"`
@@ -52,6 +63,10 @@ func main() {
 		os.Exit(1)
 	}
 	addr := flag.Args()[0]
+	StartMosh(addr, params.Login, params.MoshPorts, params.SSHPort, params.Timeout, 0)
+}
+
+func StartMosh(addr, login, moshPorts string, port int, tout time.Duration, hcon uintptr) error {
 	ips, err := net.LookupIP(addr)
 	if err != nil {
 		log.Fatal(err)
@@ -59,14 +74,14 @@ func main() {
 	if len(ips) == 0 {
 		log.Fatalf("name %q resolved to %v", addr, ips)
 	}
-	port, key, err := runServer(addr, params.Login, params.MoshPorts, params.SSHPort, params.Timeout)
+	port, key, err := runServer(addr, login, moshPorts, port, tout)
 	if err != nil {
 		log.Fatal(err)
+		return err
 	}
 
 	os.Setenv("MOSH_KEY", key)
 	os.Setenv("MOSH_PREDICTION_DISPLAY", "adaptive")
-
 
 	if runtime.GOOS == "windows" {
 		executableFullPathName, err := os.Executable()
@@ -81,7 +96,7 @@ func main() {
 
 		attrs := &os.ProcAttr{
 			Env: os.Environ(),
-			Files: []*os.File {
+			Files: []*os.File{
 				os.Stdin,
 				os.Stdout,
 				os.Stderr,
@@ -106,6 +121,7 @@ func main() {
 
 		log.Fatal(syscall.Exec(clientPath, []string{clientPath, ips[0].String(), strconv.Itoa(port)}, os.Environ()))
 	}
+	return nil
 }
 
 func runServer(addr, login, moshPorts string, port int, tout time.Duration) (int, string, error) {
