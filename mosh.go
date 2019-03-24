@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	params := GetDefaultSettings()
+	params := mosh.GetDefaultSettings()
 	autoflags.Define(&params)
 	flag.Parse()
 	if len(flag.Args()) != 1 {
