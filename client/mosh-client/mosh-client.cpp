@@ -75,6 +75,17 @@ int mosh_main( int argc, char *argv[] )
 int main( int argc, char *argv[] )
 #endif
 {
+  HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD dwinputMode;
+  GetConsoleMode(hInput, &dwinputMode);
+  dwinputMode &= ~(ENABLE_LINE_INPUT |
+          ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
+  dwinputMode |= ENABLE_WINDOW_INPUT;
+  if (!SetConsoleMode(hInput, dwinputMode)) {
+      fatal_assert(true);
+      exit(1);
+  }
+
   HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD dwMode;
   GetConsoleMode(hOutput, &dwMode);
