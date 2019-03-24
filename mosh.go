@@ -42,20 +42,24 @@ func GetDefaultPorts() string {
 	return defaultPorts
 }
 
-func main() {
-	defaultUser := GetDefaultUser()
-	defaultPorts := GetDefaultPorts()
-	params := struct {
-		SSHPort   int           `flag:"sshport,ssh port to use"`
-		Login     string        `flag:"l,login"`
-		MoshPorts string        `flag:"p,server-side UDP port or colon-separated range"`
-		Timeout   time.Duration `flag:"timeout,ssh connect timeout"`
-	}{
+func GetDefaultSettings() Settings {
+	return Settings{
 		SSHPort:   22,
-		Login:     defaultUser,
-		MoshPorts: defaultPorts,
+		Login:     GetDefaultUser(),
+		MoshPorts: GetDefaultPorts(),
 		Timeout:   5 * time.Second,
 	}
+}
+
+type Settings struct {
+	SSHPort   int           `flag:"sshport,ssh port to use"`
+	Login     string        `flag:"l,login"`
+	MoshPorts string        `flag:"p,server-side UDP port or colon-separated range"`
+	Timeout   time.Duration `flag:"timeout,ssh connect timeout"`
+}
+
+func main() {
+	params := GetDefaultSettings()
 	autoflags.Define(&params)
 	flag.Parse()
 	if len(flag.Args()) != 1 {
@@ -63,10 +67,10 @@ func main() {
 		os.Exit(1)
 	}
 	addr := flag.Args()[0]
-	StartMosh(addr, params.Login, params.MoshPorts, params.SSHPort, params.Timeout, 0)
+	StartMosh(addr, &params, 0)
 }
 
-func StartMosh(addr, login, moshPorts string, port int, tout time.Duration, hcon uintptr) error {
+func StartMosh(addr string, params *Settings, hcon uintptr) error {
 	ips, err := net.LookupIP(addr)
 	if err != nil {
 		log.Fatal(err)
@@ -74,7 +78,7 @@ func StartMosh(addr, login, moshPorts string, port int, tout time.Duration, hcon
 	if len(ips) == 0 {
 		log.Fatalf("name %q resolved to %v", addr, ips)
 	}
-	port, key, err := runServer(addr, login, moshPorts, port, tout)
+	port, key, err := runServer(addr, params.Login, params.MoshPorts, params.SSHPort, params.Timeout)
 	if err != nil {
 		log.Fatal(err)
 		return err
