@@ -44,7 +44,10 @@ type Settings struct {
 	Timeout   time.Duration `flag:"timeout,ssh connect timeout"`
 }
 
-func StartMosh(addr string, params *Settings, hcon uintptr) error {
+// StartMosh will start mosh with specified parameters
+// if hcon (Windows ConPTY handle) is non-zero, it will be used as pty
+// Upon completion, the exit code will be sent to `exit` channel
+func StartMosh(addr string, params *Settings, hcon uintptr, exit chan int) error {
 	ips, err := net.LookupIP(addr)
 	if err != nil {
 		log.Fatal(err)
@@ -72,24 +75,13 @@ func StartMosh(addr string, params *Settings, hcon uintptr) error {
 		// Point to our own TERMINFO database to make the mosh_client working
 		os.Setenv("TERMINFO", filepath.Join(pathToExecutable, "terminfo"))
 
-		attrs := &os.ProcAttr{
-			Env: os.Environ(),
-			Files: []*os.File{
-				os.Stdin,
-				os.Stdout,
-				os.Stderr,
-			},
-		}
-
 		moshClientFullPathName := filepath.Join(pathToExecutable, "mosh-client.exe")
-		process, err := os.StartProcess(moshClientFullPathName, []string{moshClientFullPathName, ips[0].String(), strconv.Itoa(port)}, attrs)
-		if err != nil {
-			log.Fatal(err)
-		}
+		params := []string{moshClientFullPathName, ips[0].String(), strconv.Itoa(port)}
 
-		_, err = process.Wait()
-		if err != nil {
-			log.Print(err)
+		if hcon == 0 {
+			return startLegacy(moshClientFullPathName, params, exit)
+		} else {
+			return startConPtyClient(moshClientFullPathName, params, hcon, exit)
 		}
 	} else {
 		clientPath, err := exec.LookPath("mosh-client")
@@ -100,4 +92,37 @@ func StartMosh(addr string, params *Settings, hcon uintptr) error {
 		log.Fatal(syscall.Exec(clientPath, []string{clientPath, ips[0].String(), strconv.Itoa(port)}, os.Environ()))
 	}
 	return nil
+}
+
+func startLegacy(fullPath string, params []string, exit chan int) error {
+	attrs := &os.ProcAttr{
+		Env: os.Environ(),
+		Files: []*os.File{
+			os.Stdin,
+			os.Stdout,
+			os.Stderr,
+		},
+	}
+
+	process, err := os.StartProcess(fullPath, params, attrs)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	if exit != nil {
+		convertProcessExitCodeToChannelMessage(process, exit)
+	}
+	return err
+}
+
+func convertProcessExitCodeToChannelMessage(process *os.Process, exit chan int) {
+	go func() {
+		state, err := process.Wait()
+		exitCode := -1
+		if err == nil {
+			exitCode = state.ExitCode()
+		}
+		exit <- exitCode
+	}()
 }

@@ -20,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 	addr := flag.Args()[0]
-	mosh.StartMosh(addr, &params, 0)
+	mosh.StartMosh(addr, &params, 0, nil)
 }
 
 func init() {
