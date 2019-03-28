@@ -244,15 +244,13 @@ void STMClient::main_init( void )
   int result = GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &window_size);
   if (!result) {
       DWORD errorCode = GetLastError();
-      int test = 1;
-      int test2 = test;
       return;
   }
 
-  //window_size.dwSize.Y = 30;
+  int visibleHeight = window_size.srWindow.Bottom - window_size.srWindow.Top + 1;
 
   /* local state */
-  local_framebuffer = Terminal::Framebuffer( window_size.dwSize.X, window_size.dwSize.Y );
+  local_framebuffer = Terminal::Framebuffer( window_size.dwSize.X, visibleHeight );
   new_state = Terminal::Framebuffer( 1, 1 );
 
   /* initialize screen */
@@ -261,13 +259,13 @@ void STMClient::main_init( void )
 
   /* open network */
   Network::UserStream blank;
-  Terminal::Complete local_terminal( window_size.dwSize.X, window_size.dwSize.Y );
+  Terminal::Complete local_terminal( window_size.dwSize.X, visibleHeight );
   network = NetworkPointer( new NetworkType( blank, local_terminal, key.c_str(), ip.c_str(), port.c_str() ) );
 
   network->set_send_delay( 1 ); /* minimal delay on outgoing keystrokes */
 
   /* tell server the size of the terminal */
-  network->get_current_state().push_back( Parser::Resize( window_size.dwSize.X, window_size.dwSize.Y ) );
+  network->get_current_state().push_back( Parser::Resize( window_size.dwSize.X, visibleHeight ) );
 
   /* be noisy as necessary */
   network->set_verbose( verbose );
