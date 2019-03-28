@@ -44,4 +44,4 @@ mosh-client:
         -I client/mosh-client/crypto \
         -I client/mosh-client/protobufs \
         -I client/mosh-client/openssl-1.1.1b-win64-mingw/include \
-            -L libs -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz
+            -L libs -static -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz

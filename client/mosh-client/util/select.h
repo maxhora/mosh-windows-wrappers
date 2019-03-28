@@ -76,18 +76,54 @@ typedef int sigset_t;
 int w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 #define sigprocmask(a,b,c) w32_sigprocmask((a), (b), (c))
 
+#ifndef SIGINT
 #define SIGINT	W32_SIGINT
+#endif
+
+#ifndef SIGSEGV
 #define SIGSEGV	W32_SIGSEGV
+#endif
+
+#ifndef SIGPIPE
 #define SIGPIPE	W32_SIGPIPE
+#endif
+
+#ifndef SIGCHLD
 #define SIGCHLD	W32_SIGCHLD
+#endif
+
+#ifndef SIGALRM
 #define SIGALRM	W32_SIGALRM
+#endif
+
+#ifndef SIGTSTP
 #define SIGTSTP	W32_SIGTSTP
+#endif
+
+#ifndef SIGHUP
 #define SIGHUP	W32_SIGHUP
+#endif
+
+#ifndef SIGQUIT
 #define SIGQUIT	W32_SIGQUIT
+#endif
+
+#ifndef SIGTERM
 #define SIGTERM	W32_SIGTERM
+#endif
+
+#ifndef SIGTTIN
 #define SIGTTIN	W32_SIGTTIN
+#endif
+
+#ifndef SIGTTOU
 #define SIGTTOU	W32_SIGTTOU
+#endif
+
+#ifndef SIGWINCH
 #define SIGWINCH W32_SIGWINCH
+#endif
+
 
 /* Convenience wrapper for pselect(2).
 
