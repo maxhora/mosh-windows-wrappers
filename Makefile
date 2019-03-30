@@ -34,6 +34,8 @@ mosh-client:
             client/mosh-client/util/swrite.cc \
             client/mosh-client/util/select.cc \
             client/mosh-client/util/timestamp.cc \
+            client/mosh-client/win32compat/tncon.cc \
+        -I client/mosh-client/win32compat \
         -I client/mosh-client/statesync \
         -I client/mosh-client/terminal \
         -I client/mosh-client/util \

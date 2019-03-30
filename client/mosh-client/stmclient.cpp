@@ -63,6 +63,8 @@
 
 #include "networktransport-impl.h"
 
+#include "tncon.h"
+
 using std::wstring;
 
 void STMClient::resume( void )
@@ -323,12 +325,9 @@ bool STMClient::process_user_input( int fd )
   //}
 
   HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
-  const int BUFFER_LENGTH = 128;
-  INPUT_RECORD inputRecord[BUFFER_LENGTH];
   DWORD bytes_read = 0;
 
-  if (!ReadConsoleInput(inputHandle, inputRecord, BUFFER_LENGTH, &bytes_read))
-      return false;
+  bytes_read = ReadConsoleForTermEmul(inputHandle, buf, buf_size);
 
   NetworkType &net = *network;
 
@@ -344,16 +343,7 @@ bool STMClient::process_user_input( int fd )
   }
 
   for ( int i = 0; i < bytes_read; i++ ) {
-      if (inputRecord[i].EventType == KEY_EVENT) {
-          // Skip key release events
-          if (inputRecord[i].Event.KeyEvent.bKeyDown == false)
-              continue;
-      }
-
-    char the_byte = inputRecord[i].Event.KeyEvent.uChar.AsciiChar;//buf[ i ];
-
-    if (inputRecord[i].Event.KeyEvent.wVirtualKeyCode == VK_SHIFT)
-        continue;
+    char the_byte = buf[ i ];
 
     if ( !paste ) {
       overlays.get_prediction_engine().new_user_byte( the_byte, local_framebuffer );
