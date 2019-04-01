@@ -63,6 +63,8 @@
 
 #include "networktransport-impl.h"
 
+#include "tncon.h"
+
 using std::wstring;
 
 void STMClient::resume( void )
@@ -247,10 +249,11 @@ void STMClient::main_init( void )
       return;
   }
 
+  int visibleWidth = window_size.srWindow.Right - window_size.srWindow.Left + 1;
   int visibleHeight = window_size.srWindow.Bottom - window_size.srWindow.Top + 1;
 
   /* local state */
-  local_framebuffer = Terminal::Framebuffer( window_size.dwSize.X, visibleHeight );
+  local_framebuffer = Terminal::Framebuffer( visibleWidth, visibleHeight );
   new_state = Terminal::Framebuffer( 1, 1 );
 
   /* initialize screen */
@@ -259,13 +262,13 @@ void STMClient::main_init( void )
 
   /* open network */
   Network::UserStream blank;
-  Terminal::Complete local_terminal( window_size.dwSize.X, visibleHeight );
+  Terminal::Complete local_terminal( visibleWidth, visibleHeight );
   network = NetworkPointer( new NetworkType( blank, local_terminal, key.c_str(), ip.c_str(), port.c_str() ) );
 
   network->set_send_delay( 1 ); /* minimal delay on outgoing keystrokes */
 
   /* tell server the size of the terminal */
-  network->get_current_state().push_back( Parser::Resize( window_size.dwSize.X, visibleHeight ) );
+  network->get_current_state().push_back( Parser::Resize( visibleWidth, visibleHeight ) );
 
   /* be noisy as necessary */
   network->set_verbose( verbose );
@@ -323,12 +326,9 @@ bool STMClient::process_user_input( int fd )
   //}
 
   HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
-  const int BUFFER_LENGTH = 128;
-  INPUT_RECORD inputRecord[BUFFER_LENGTH];
   DWORD bytes_read = 0;
 
-  if (!ReadConsoleInput(inputHandle, inputRecord, BUFFER_LENGTH, &bytes_read))
-      return false;
+  bytes_read = ReadConsoleForTermEmul(inputHandle, buf, buf_size);
 
   NetworkType &net = *network;
 
@@ -344,16 +344,7 @@ bool STMClient::process_user_input( int fd )
   }
 
   for ( int i = 0; i < bytes_read; i++ ) {
-      if (inputRecord[i].EventType == KEY_EVENT) {
-          // Skip key release events
-          if (inputRecord[i].Event.KeyEvent.bKeyDown == false)
-              continue;
-      }
-
-    char the_byte = inputRecord[i].Event.KeyEvent.uChar.AsciiChar;//buf[ i ];
-
-    if (inputRecord[i].Event.KeyEvent.wVirtualKeyCode == VK_SHIFT)
-        continue;
+    char the_byte = buf[ i ];
 
     if ( !paste ) {
       overlays.get_prediction_engine().new_user_byte( the_byte, local_framebuffer );

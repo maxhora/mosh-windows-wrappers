@@ -28,8 +28,10 @@ set(MOSH_SRC client/mosh-client/mosh-client.cpp
                 client/mosh-client/util/pty_compat.cc
                 client/mosh-client/util/swrite.cc
                 client/mosh-client/util/select.cc
-                client/mosh-client/util/timestamp.cc)
+                client/mosh-client/util/timestamp.cc
+                client/mosh-client/win32compat/tncon.cc)
 
+include_directories(client/mosh-client/win32compat)
 include_directories(client/mosh-client/statesync)
 include_directories(client/mosh-client/terminal)
 include_directories(client/mosh-client/util)
