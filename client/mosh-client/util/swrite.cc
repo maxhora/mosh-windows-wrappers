@@ -33,22 +33,27 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <winnls.h>
+#include <string>
+#include <windows.h>
+#include <fstream>
+#include <iostream>
 
 #include "swrite.h"
 
-int swrite( int fd, const char *str, ssize_t len )
-{
-  ssize_t total_bytes_written = 0;
-  ssize_t bytes_to_write = ( len >= 0 ) ? len : (ssize_t) strlen( str );
-  while ( total_bytes_written < bytes_to_write ) {
-    ssize_t bytes_written = write( fd, str + total_bytes_written,
-				   bytes_to_write - total_bytes_written );
-    if ( bytes_written <= 0 ) {
-      perror( "write" );
-      return -1;
+int swrite( int fd, const char *str, ssize_t len ) {
+    if(fd != STDOUT_FILENO) {
+        return -1; // swrite() is used only to write to STDOUT_FILENO
     }
-    total_bytes_written += bytes_written;
-  }
 
-  return 0;
+    if(len == 0) {
+        return 0;
+    }
+
+    DWORD dwCount = 0;
+    if( !WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), str, len, &dwCount, nullptr) ) {
+        return -1;
+    }
+
+    return 0;
 }

@@ -35,7 +35,9 @@
 #include <errno.h>
 #include <wchar.h>
 #include <stdint.h>
+#include <winnls.h>
 
+#include "mbrtowc_utf8.h"
 #include "parser.h"
 
 const Parser::StateFamily Parser::family;
@@ -73,86 +75,85 @@ Parser::UTF8Parser::UTF8Parser()
   buf[0] = '\0';
 }
 
-void Parser::UTF8Parser::input( char c, Actions &ret )
-{
-  assert( buf_len < BUF_SIZE );
+void Parser::UTF8Parser::input( char c, Actions &ret ) {
+    assert(buf_len < BUF_SIZE);
 
-  /* 1-byte UTF-8 character, aka ASCII?  Cheat. */
-  if ( buf_len == 0 && static_cast<unsigned char>(c) <= 0x7f ) {
-    parser.input( static_cast<wchar_t>(c), ret );
-    return;
-  }
-
-  buf[ buf_len++ ] = c;
-
-  /* This function will only work in a UTF-8 locale. */
-  wchar_t pwc;
-  mbstate_t ps = mbstate_t();
-
-  size_t total_bytes_parsed = 0;
-  size_t orig_buf_len = buf_len;
-
-  /* this routine is somewhat complicated in order to comply with
-     Unicode 6.0, section 3.9, "Best Practices for using U+FFFD" */
-
-  while ( total_bytes_parsed != orig_buf_len ) {
-    assert( total_bytes_parsed < orig_buf_len );
-    assert( buf_len > 0 );
-    size_t bytes_parsed = mbrtowc( &pwc, buf, buf_len, &ps );
-
-    /* this returns 0 when n = 0! */
-
-    if ( bytes_parsed == 0 ) {
-      /* character was NUL, accept and clear buffer */
-      assert( buf_len == 1 );
-      buf_len = 0;
-      pwc = L'\0';
-      bytes_parsed = 1;
-    } else if ( bytes_parsed == (size_t) -1 ) {
-      /* invalid sequence, use replacement character and try again with last char */
-      assert( errno == EILSEQ );
-      if ( buf_len > 1 ) {
-	buf[ 0 ] = buf[ buf_len - 1 ];
-	bytes_parsed = buf_len - 1;
-	buf_len = 1;
-      } else {
-	buf_len = 0;
-	bytes_parsed = 1;
-      }
-      pwc = (wchar_t) 0xFFFD;
-    } else if ( bytes_parsed == (size_t) -2 ) {
-      /* can't parse incomplete multibyte character */
-      total_bytes_parsed += buf_len;
-      continue;
-    } else {
-      /* parsed into pwc, accept */
-      assert( bytes_parsed <= buf_len );
-      memmove( buf, buf + bytes_parsed, buf_len - bytes_parsed );
-      buf_len = buf_len - bytes_parsed;
+    /* 1-byte UTF-8 character, aka ASCII?  Cheat. */
+    if (buf_len == 0 && static_cast<unsigned char>(c) <= 0x7f) {
+        parser.input(static_cast<wchar_t>(c), ret);
+        return;
     }
 
-    /* Cast to unsigned for checks, because some
-       platforms (e.g. ARM) use uint32_t as wchar_t,
-       causing compiler warning on "pwc > 0" check. */
-    const uint32_t pwcheck = pwc;
+    buf[buf_len++] = c;
 
-    if ( pwcheck > 0x10FFFF ) { /* outside Unicode range */
-      pwc = (wchar_t) 0xFFFD;
+    /* This function will only work in a UTF-8 locale. */
+    wchar_t pwc;
+    //mbstate_t ps = mbstate_t();
+
+    size_t total_bytes_parsed = 0;
+    size_t orig_buf_len = buf_len;
+
+    /* this routine is somewhat complicated in order to comply with
+       Unicode 6.0, section 3.9, "Best Practices for using U+FFFD" */
+
+    while (total_bytes_parsed != orig_buf_len) {
+        assert(total_bytes_parsed < orig_buf_len);
+        assert(buf_len > 0);
+        size_t bytes_parsed = mbrtowc_utf8(&pwc, buf, buf_len);
+
+        /* this returns 0 when n = 0! */
+
+        if (bytes_parsed == 0) {
+            /* character was NUL, accept and clear buffer */
+            assert(buf_len == 1);
+            buf_len = 0;
+            pwc = L'\0';
+            bytes_parsed = 1;
+        } else if (bytes_parsed == (size_t) -1) {
+            /* invalid sequence, use replacement character and try again with last char */
+            assert(errno == EILSEQ);
+            if (buf_len > 1) {
+                buf[0] = buf[buf_len - 1];
+                bytes_parsed = buf_len - 1;
+                buf_len = 1;
+            } else {
+                buf_len = 0;
+                bytes_parsed = 1;
+            }
+            pwc = (wchar_t) 0xFFFD;
+        } else if (bytes_parsed == (size_t) -2) {
+            /* can't parse incomplete multibyte character */
+            total_bytes_parsed += buf_len;
+            continue;
+        } else {
+            /* parsed into pwc, accept */
+            assert(bytes_parsed <= buf_len);
+            memmove(buf, buf + bytes_parsed, buf_len - bytes_parsed);
+            buf_len = buf_len - bytes_parsed;
+        }
+
+        /* Cast to unsigned for checks, because some
+           platforms (e.g. ARM) use uint32_t as wchar_t,
+           causing compiler warning on "pwc > 0" check. */
+        const uint32_t pwcheck = pwc;
+
+        if (pwcheck > 0x10FFFF) { /* outside Unicode range */
+            pwc = (wchar_t) 0xFFFD;
+        }
+
+        if ((pwcheck >= 0xD800) && (pwcheck <= 0xDFFF)) { /* surrogate code point */
+            /*
+          OS X unfortunately allows these sequences without EILSEQ, but
+          they are ill-formed UTF-8 and we shouldn't repeat them to the
+          user's terminal.
+            */
+            pwc = (wchar_t) 0xFFFD;
+        }
+
+        parser.input(pwc, ret);
+
+        total_bytes_parsed += bytes_parsed;
     }
-
-    if ( (pwcheck >= 0xD800) && (pwcheck <= 0xDFFF) ) { /* surrogate code point */
-      /*
-	OS X unfortunately allows these sequences without EILSEQ, but
-	they are ill-formed UTF-8 and we shouldn't repeat them to the
-	user's terminal.
-      */
-      pwc = (wchar_t) 0xFFFD;
-    }
-
-    parser.input( pwc, ret );
-
-    total_bytes_parsed += bytes_parsed;
-  }
 }
 
 Parser::Parser::Parser( const Parser &other )
