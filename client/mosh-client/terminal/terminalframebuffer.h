@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdint.h>
+#include <stringapiset.h>
 
 #include <vector>
 #include <deque>
@@ -167,23 +168,33 @@ namespace Terminal {
       dest.append( tmp, len );
     }
 
-    void append( const wchar_t c )
-    {
-      /* ASCII?  Cheat. */
-      if ( static_cast<uint32_t>(c) <= 0x7f ) {
-	contents.push_back( static_cast<char>(c) );
-	return;
-      }
-      static mbstate_t ps = mbstate_t();
-      char tmp[MB_LEN_MAX];
-      size_t ignore = wcrtomb(NULL, 0, &ps);
-      (void)ignore;
-      size_t len = wcrtomb(tmp, c, &ps);
-      if (len == static_cast<std::size_t>(-1)) {
-          // TODO(MaxRis): strange failure
-          return;
-      }
-      contents.insert( contents.end(), tmp, tmp+len );
+    void append( const wchar_t c ) {
+        /* ASCII?  Cheat. */
+        if (static_cast<uint32_t>(c) <= 0x7f) {
+            contents.push_back(static_cast<char>(c));
+            return;
+        }
+
+        //*
+        char tmp[MB_LEN_MAX] = {};
+        int len = WideCharToMultiByte(CP_UTF8, 0, &c, 1, tmp, _countof(tmp), NULL, NULL);
+        if(len == 0) {
+            // check GetLastError()?
+            return;
+        }
+
+        /*/
+        static mbstate_t ps = mbstate_t();
+        char tmp[MB_LEN_MAX];
+        size_t ignore = wcrtomb(NULL, 0, &ps);
+        (void) ignore;
+        size_t len = wcrtomb(tmp, c, &ps);
+        if (len == static_cast<std::size_t>(-1)) {
+            // TODO(MaxRis): strange failure
+            return;
+        }
+        //*/
+        contents.insert(contents.end(), tmp, tmp + len);
     }
 
     void print_grapheme( std::string &output ) const

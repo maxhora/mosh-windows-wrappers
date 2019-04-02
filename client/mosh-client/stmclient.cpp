@@ -120,6 +120,18 @@ void STMClient::init( void )
   //    exit( 1 );
   //}
 
+  BOOL rc = SetConsoleOutputCP(CP_UTF8);
+  if(!rc) {
+      fprintf(stderr, "SetConsoleOutputCP error: 0x%.8X\n", GetLastError());
+      exit(1);
+  }
+
+  rc = SetConsoleCP(CP_UTF8);
+  if(!rc) {
+      fprintf(stderr, "SetConsoleCP error: 0x%.8X\n", GetLastError());
+      exit(1);
+  }
+
   /* Put terminal in application-cursor-key mode */
   swrite( STDOUT_FILENO, display.open().c_str() );
 
