@@ -160,7 +160,7 @@ GetModifierKey(DWORD dwControlKeyState)
 }
 
 int
-ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
+ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen, const std::function<void()> resizeHandler)
 {
 	HANDLE hHandle[] = { hInput, NULL };
 	DWORD nHandle = 1;
@@ -192,8 +192,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 		ReadConsoleInputW(hInput, &InputRecord, 1, &dwInput);
 		switch (InputRecord.EventType) {
 		case WINDOW_BUFFER_SIZE_EVENT:
-            // TODO(MaxRis)
-            //queue_terminal_window_change_event();
+		    resizeHandler();
 			break;
 
 		case FOCUS_EVENT:

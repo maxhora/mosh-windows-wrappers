@@ -323,7 +323,7 @@ void STMClient::process_network_input( void )
   overlays.get_prediction_engine().set_local_frame_late_acked( network->get_latest_remote_state().state.get_echo_ack() );
 }
 
-bool STMClient::process_user_input( int fd )
+bool STMClient::process_user_input( void )
 {
   const int buf_size = 16384;
   char buf[ buf_size ];
@@ -340,7 +340,9 @@ bool STMClient::process_user_input( int fd )
   HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
   DWORD bytes_read = 0;
 
-  bytes_read = ReadConsoleForTermEmul(inputHandle, buf, buf_size);
+  auto resizeCallback = [this]() { process_resize(); };
+
+  bytes_read = ReadConsoleForTermEmul(inputHandle, buf, buf_size, resizeCallback);
 
   NetworkType &net = *network;
 
@@ -425,29 +427,36 @@ bool STMClient::process_user_input( int fd )
   return true;
 }
 
-bool STMClient::process_resize( void )
-{
-  /* get new size */
-  //if ( ioctl( STDIN_FILENO, TIOCGWINSZ, &window_size ) < 0 ) {
-  //  perror( "ioctl TIOCGWINSZ" );
-  //  return false;
-  //}
+bool STMClient::process_resize( void ) {
+    /* get new size */
+    //if ( ioctl( STDIN_FILENO, TIOCGWINSZ, &window_size ) < 0 ) {
+    //  perror( "ioctl TIOCGWINSZ" );
+    //  return false;
+    //}
 
-  //window_size.ws_col = window_size.ws_col - 1;
-  
-  /* tell remote emulator */
-  Parser::Resize res( window_size.dwSize.X, window_size.dwSize.Y );
-  
-  if ( !network->shutdown_in_progress() ) {
-    network->get_current_state().push_back( res );
-  }
+    //window_size.ws_col = window_size.ws_col - 1;
 
-  /* note remote emulator will probably reply with its own Resize to adjust our state */
-  
-  /* tell prediction engine */
-  overlays.get_prediction_engine().reset();
+    int result = GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &window_size);
+    if(!result) {
+        return false;
+    }
 
-  return true;
+    int visibleWidth = window_size.srWindow.Right - window_size.srWindow.Left + 1;
+    int visibleHeight = window_size.srWindow.Bottom - window_size.srWindow.Top + 1;
+
+    /* tell remote emulator */
+    Parser::Resize res(visibleWidth, visibleHeight);
+
+    if (!network->shutdown_in_progress()) {
+        network->get_current_state().push_back(res);
+    }
+
+    /* note remote emulator will probably reply with its own Resize to adjust our state */
+
+    /* tell prediction engine */
+    overlays.get_prediction_engine().reset();
+
+    return true;
 }
 
 bool STMClient::main( void )
@@ -514,8 +523,8 @@ bool STMClient::main( void )
       if ( network_ready_to_read ) {
         process_network_input();
       }
-    
-      if ( inputEventCount && !process_user_input( inputEventCount )/*sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO )*/ ) { // input from the user needs to be fed to the network
+
+      if ( inputEventCount && !process_user_input()/*sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO )*/ ) { // input from the user needs to be fed to the network
         if ( !network->has_remote_addr() ) {
           break;
         } else if ( !network->shutdown_in_progress() ) {
