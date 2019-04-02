@@ -1,6 +1,7 @@
+cmake_minimum_required(VERSION 3.13)
 project(mosh-client)
 
-set(MOSH_SRC client/mosh-client/mosh-client.cpp
+set(LIB_MOSH_SRC client/mosh-client/junk.cpp 
                 client/mosh-client/stmclient.cpp
                 client/mosh-client/terminaloverlay.cpp
                 client/mosh-client/crypto/crypto.cc
@@ -32,6 +33,8 @@ set(MOSH_SRC client/mosh-client/mosh-client.cpp
                 client/mosh-client/util/mbrtowc_utf8
                 client/mosh-client/win32compat/tncon.cc)
 
+set(MOSH_SRC client/mosh-client/mosh-client.cpp)
+
 include_directories(client/mosh-client/win32compat)
 include_directories(client/mosh-client/statesync)
 include_directories(client/mosh-client/terminal)
@@ -42,6 +45,9 @@ include_directories(client/mosh-client/crypto)
 include_directories(client/mosh-client/protobufs)
 include_directories(client/mosh-client/openssl-1.1.1b-win64-mingw/include)
 
+add_library(libmoshclient STATIC ${LIB_MOSH_SRC})
 add_executable(${PROJECT_NAME} ${MOSH_SRC})
+
 target_link_libraries(${PROJECT_NAME} -L${PROJECT_SOURCE_DIR}/libs)
-target_link_libraries(${PROJECT_NAME} -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz)
+target_link_libraries(${PROJECT_NAME} libmoshclient)
+target_link_libraries(${PROJECT_NAME} -static -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz)

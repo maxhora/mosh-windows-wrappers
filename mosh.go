@@ -21,11 +21,14 @@ import (
 	"golang.org/x/net/proxy"
 
 	"github.com/artyom/autoflags"
-	"runtime"
+	"github.com/jumptrading/mosh-go/client"
 	"path/filepath"
+	"runtime"
 )
 
 func main() {
+	client.Rrr()
+
 	defaultUser := os.Getenv("MOSH_USER")
 	if defaultUser == "" {
 		defaultUser = os.Getenv("USER")
@@ -67,7 +70,6 @@ func main() {
 	os.Setenv("MOSH_KEY", key)
 	os.Setenv("MOSH_PREDICTION_DISPLAY", "adaptive")
 
-
 	if runtime.GOOS == "windows" {
 		executableFullPathName, err := os.Executable()
 		if err != nil {
@@ -81,7 +83,7 @@ func main() {
 
 		attrs := &os.ProcAttr{
 			Env: os.Environ(),
-			Files: []*os.File {
+			Files: []*os.File{
 				os.Stdin,
 				os.Stdout,
 				os.Stderr,
