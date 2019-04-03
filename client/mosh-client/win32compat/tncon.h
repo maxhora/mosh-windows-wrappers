@@ -35,6 +35,7 @@
 //#ifndef __TNCON_H
 //#define __TNCON_H
 
+#include <functional>
 //#include "console.h"
 #include "windows.h"
 
@@ -222,6 +223,6 @@
 #define CURSOR_REPORT_FORMAT_STRING "\x1b[%d;%dR"
 #define VT52_TERMINAL_ID            "\x1b/Z"
 
-int ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen);
+int ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen, std::function<void()> resizeHandler);
 
 //#endif
