@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(mosh-client)
 
-set(LIB_MOSH_SRC client/mosh-client/junk.cpp 
+set(LIB_MOSH_SRC client/mosh-client/libinterface.cpp
                 client/mosh-client/stmclient.cpp
                 client/mosh-client/terminaloverlay.cpp
                 client/mosh-client/crypto/crypto.cc
@@ -45,9 +45,9 @@ include_directories(client/mosh-client/crypto)
 include_directories(client/mosh-client/protobufs)
 include_directories(client/mosh-client/openssl-1.1.1b-win64-mingw/include)
 
-add_library(libmoshclient STATIC ${LIB_MOSH_SRC})
+add_library(moshclient STATIC ${LIB_MOSH_SRC})
 add_executable(${PROJECT_NAME} ${MOSH_SRC})
 
 target_link_libraries(${PROJECT_NAME} -L${PROJECT_SOURCE_DIR}/libs)
-target_link_libraries(${PROJECT_NAME} libmoshclient)
+target_link_libraries(${PROJECT_NAME} moshclient)
 target_link_libraries(${PROJECT_NAME} -static -lprotobuf -lprotobuf-lite -lprotoc -lcrypto -lssl -pthread -lpthread -lws2_32 -lz)
