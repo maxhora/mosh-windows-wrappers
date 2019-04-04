@@ -35,6 +35,7 @@ mosh-client:
             client/mosh-client/util/select.cc \
             client/mosh-client/util/timestamp.cc \
             client/mosh-client/win32compat/tncon.cc \
+            client/mosh-client/win32compat/dup_socket.cc \
         -I client/mosh-client/win32compat \
         -I client/mosh-client/statesync \
         -I client/mosh-client/terminal \

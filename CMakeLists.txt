@@ -31,7 +31,8 @@ set(LIB_MOSH_SRC client/mosh-client/libinterface.cpp
                 client/mosh-client/util/select.cc
                 client/mosh-client/util/timestamp.cc
                 client/mosh-client/util/mbrtowc_utf8
-                client/mosh-client/win32compat/tncon.cc)
+                client/mosh-client/win32compat/tncon.cc
+                client/mosh-client/win32compat/dup_socket.cc)
 
 set(MOSH_SRC client/mosh-client/mosh-client.cpp)
 

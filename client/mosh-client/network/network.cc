@@ -59,6 +59,7 @@
 #include "mswsock.h"
 
 #include <io.h>
+#include <dup_socket.h>
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0
@@ -717,26 +718,24 @@ uint64_t Connection::timeout( void ) const
 
 Connection::Socket::~Socket()
 {
-    // TODO(MaxRis): fix duplicating failure first
-   //close( _fd );//fatal_assert ( close( _fd ) == 0 );
+   fatal_assert ( closesocket( _fd ) == 0 );
 }
 
 Connection::Socket::Socket( const Socket & other )
-  : _fd( other._fd /*dup( other._fd )*/ ) // TODO(MaxRis): dup returns error
-{
+  : _fd( dup_socket( other._fd ) ) {
   if ( _fd < 0 ) {
     throw NetworkException( "socket", errno );
   }
 }
 
-Connection::Socket & Connection::Socket::operator=( const Socket & other )
-{
-    //_fd = other._fd;
-  if ( dup2( other._fd, _fd ) < 0 ) {
-    throw NetworkException( "socket", errno );
-  }
+Connection::Socket & Connection::Socket::operator=( const Socket & other ) {
 
-  return *this;
+    //TODO: This will not work on Windows because dup2() and dup() cannot be used for socket handles on that OS.
+    if (dup2(other._fd, _fd) < 0) {
+        throw NetworkException("socket", errno);
+    }
+
+    return *this;
 }
 
 bool Connection::parse_portrange( const char * desired_port, int & desired_port_low, int & desired_port_high )
