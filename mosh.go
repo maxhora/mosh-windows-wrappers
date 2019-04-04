@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,13 +21,10 @@ import (
 
 	"github.com/artyom/autoflags"
 	"github.com/jumptrading/mosh-go/client"
-	"path/filepath"
 	"runtime"
 )
 
 func main() {
-	client.Rrr()
-
 	defaultUser := os.Getenv("MOSH_USER")
 	if defaultUser == "" {
 		defaultUser = os.Getenv("USER")
@@ -70,44 +66,7 @@ func main() {
 	os.Setenv("MOSH_KEY", key)
 	os.Setenv("MOSH_PREDICTION_DISPLAY", "adaptive")
 
-	if runtime.GOOS == "windows" {
-		executableFullPathName, err := os.Executable()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		pathToExecutable := filepath.Dir(executableFullPathName)
-
-		// Point to our own TERMINFO database to make the mosh_client working
-		os.Setenv("TERMINFO", filepath.Join(pathToExecutable, "terminfo"))
-
-		attrs := &os.ProcAttr{
-			Env: os.Environ(),
-			Files: []*os.File{
-				os.Stdin,
-				os.Stdout,
-				os.Stderr,
-			},
-		}
-
-		moshClientFullPathName := filepath.Join(pathToExecutable, "mosh-client.exe")
-		process, err := os.StartProcess(moshClientFullPathName, []string{moshClientFullPathName, ips[0].String(), strconv.Itoa(port)}, attrs)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = process.Wait()
-		if err != nil {
-			log.Print(err)
-		}
-	} else {
-		clientPath, err := exec.LookPath("mosh-client")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Fatal(syscall.Exec(clientPath, []string{clientPath, ips[0].String(), strconv.Itoa(port)}, os.Environ()))
-	}
+	client.StartMoshClient(ips[0].String(), strconv.Itoa(port), key, "adaptive", false, "")
 }
 
 func runServer(addr, login, moshPorts string, port int, tout time.Duration) (int, string, error) {
