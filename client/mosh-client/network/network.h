@@ -61,7 +61,7 @@ namespace Network {
   public:
     string function;
     int the_errno;
-  private:
+  protected:
     string my_what;
   public:
     NetworkException( string s_function="<none>", int s_errno=0)
@@ -69,6 +69,14 @@ namespace Network {
         my_what(function + ": " + strerror(the_errno)) {}
     const char *what() const throw () { return my_what.c_str(); }
     ~NetworkException() throw () {}
+  };
+
+  class WSAException : public NetworkException {
+  public:
+      WSAException(string s_function, int wsaError) : NetworkException(s_function, 0) {
+          //TODO: use FormatMessage() to get correct error message
+          my_what = function + ": " + std::to_string(wsaError);
+      }
   };
 
   enum Direction {
