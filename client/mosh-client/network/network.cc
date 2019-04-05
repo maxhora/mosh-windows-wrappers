@@ -158,10 +158,10 @@ void Connection::prune_sockets( void )
 }
 
 Connection::Socket::Socket( int family )
-  : _fd( socket( family, SOCK_DGRAM, 0 ) )
+  : _fd( WSASocket( family, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED) )
 {
   if (_fd == INVALID_SOCKET)  {
-    throw NetworkException( "socket", errno );
+    throw WSAException( "WSASocket", WSAGetLastError() );
   }
 
   /* Disable path MTU discovery */
@@ -171,6 +171,11 @@ Connection::Socket::Socket( int family )
     throw NetworkException( "setsockopt", errno );
   }
 #endif
+
+  u_long mode = 1;
+  if(ioctlsocket(_fd, FIONBIO, &mode) == INVALID_SOCKET) {
+      throw WSAException("ioctlsocket", WSAGetLastError());
+  }
 
   //  int dscp = 0x92; /* OS X does not have IPTOS_DSCP_AF42 constant */
   int dscp = 0x02; /* ECN-capable transport only */
@@ -538,17 +543,15 @@ string Connection::recv_one( int sock_to_recv )
   //ssize_t received_len = recvmsg( sock_to_recv, &header, MSG_DONTWAIT );
   nResult = WSARecvMsg(sock_to_recv, &msg, &received_length, NULL, NULL);
   if (nResult == SOCKET_ERROR) {
-      int err = WSAGetLastError();
-      throw NetworkException( "WSARecvMsg", errno );
-      return "";
+      throw WSAException( "WSARecvMsg", WSAGetLastError() );
   }
 
   if ( received_length < 0 ) {
-    throw NetworkException( "recvmsg", errno );
+    throw WSAException( "recvmsg", WSAGetLastError() );
   }
 
   if ( msg.dwFlags & MSG_TRUNC ) {
-    throw NetworkException( "Received oversize datagram", errno );
+    throw WSAException( "Received oversize datagram", WSAGetLastError() );
   }
 
   // receive ECN
