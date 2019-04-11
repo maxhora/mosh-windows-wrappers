@@ -75,7 +75,7 @@ namespace Network {
   public:
       WSAException(string s_function, int wsaError) : NetworkException(s_function, 0) {
           //TODO: use FormatMessage() to get correct error message
-          my_what = function + ": " + std::to_string(wsaError);
+          my_what = function + ": Error " + std::to_string(wsaError);
       }
   };
 

@@ -32,8 +32,6 @@
 
 #include "select.h"
 
-fd_set Select::dummy_fd_set;
-
 sigset_t Select::dummy_sigset;
 
 unsigned int Select::verbose = 0;

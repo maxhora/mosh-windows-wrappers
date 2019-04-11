@@ -41,8 +41,11 @@
 #include <winsock2.h>
 #include <assert.h>
 
+#include <vector>
+
 #include "fatal_assert.h"
 #include "timestamp.h"
+#include "network.h"
 
 /* signal related defs*/
 /* supported signal types */
@@ -139,17 +142,19 @@ public:
   }
 
 private:
-  Select()
-    : max_fd( -1 )
+  Select() :
     /* These initializations are not used; they are just
        here to appease -Weffc++. */
-    , all_fds( dummy_fd_set )
-    , read_fds( dummy_fd_set )
-    , empty_sigset( dummy_sigset )
+      empty_sigset( dummy_sigset )
     , consecutive_polls( 0 )
+    , socketHandles()
+    , eventHandles()
+    , waitableHandles()
   {
-    FD_ZERO( &all_fds );
-    FD_ZERO( &read_fds );
+    // just to minimize allocations
+    socketHandles.reserve(10);
+    eventHandles.reserve(WSA_MAXIMUM_WAIT_EVENTS);
+    waitableHandles.reserve(10);
 
     clear_got_signal();
     sigemptyset( &empty_sigset );//fatal_assert( 0 == sigemptyset( &empty_sigset ) );
@@ -169,17 +174,41 @@ private:
   Select &operator=( const Select & );
 
 public:
-  void add_fd( int fd )
+
+  //
+  // Adds socket to wait on
+  void add_socket( SOCKET socket )
   {
-    if ( fd > max_fd ) {
-      max_fd = fd;
-    }
-    FD_SET( fd, &all_fds );
+      socketHandles.push_back(socket);
+
+      WSAEVENT hEvent = WSACreateEvent();
+
+      if(WSAEventSelect(socket, hEvent, FD_READ | FD_CONNECT | FD_CLOSE) == SOCKET_ERROR) {
+          throw Network::WSAException("WSAEventSelect", WSAGetLastError());
+      }
+
+      eventHandles.push_back(hEvent);
   }
 
-  void clear_fds( void )
+  //
+  // Adds other handle (non-socket) to wait on.
+  // This can be any waitable handle, e.g. a file handle, an event handle, or even a thread handle
+  void add_waitable_handle( HANDLE fd )
   {
-    FD_ZERO( &all_fds );
+      waitableHandles.push_back(fd);
+  }
+
+  void clear_handles( void )
+  {
+      // Remember that the Select object does not own socketHandles and waitableHandles,
+      // but it does own events, so we're destroying all event objects we have created.
+      for (std::vector<WSAEVENT>::const_iterator it = eventHandles.begin(); it != eventHandles.end(); it++) {
+          WSACloseEvent(*it);
+      }
+      eventHandles.clear();
+
+      socketHandles.clear();
+      waitableHandles.clear();
   }
 
   static void add_signal( int signum )
@@ -203,87 +232,78 @@ public:
   }
 
   /* timeout unit: milliseconds; negative timeout means wait forever */
-  int select( int timeout )
-  {
-    memcpy( &read_fds,  &all_fds, sizeof( read_fds  ) );
-    clear_got_signal();
+  int select( int timeout ) {
+      clear_got_signal();
 
-    /* Rate-limit and warn about polls. */
-    if ( verbose > 1 && timeout == 0 ) {
-      fprintf( stderr, "%s: got poll (timeout 0)\n", __func__ );
-    }
-    if ( timeout == 0 && ++consecutive_polls >= MAX_POLLS ) {
-      if ( verbose > 1 && consecutive_polls == MAX_POLLS ) {
-	fprintf( stderr, "%s: got %d polls, rate limiting.\n", __func__, MAX_POLLS );
+      /* Rate-limit and warn about polls. */
+      if (verbose > 1 && timeout == 0) {
+          fprintf(stderr, "%s: got poll (timeout 0)\n", __func__);
       }
-      timeout = 1;
-    } else if ( timeout != 0 && consecutive_polls ) {
-      if ( verbose > 1 && consecutive_polls >= MAX_POLLS ) {
-	fprintf( stderr, "%s: got %d consecutive polls\n", __func__, consecutive_polls );
+      if (timeout == 0 && ++consecutive_polls >= MAX_POLLS) {
+          if (verbose > 1 && consecutive_polls == MAX_POLLS) {
+              fprintf(stderr, "%s: got %d polls, rate limiting.\n", __func__, MAX_POLLS);
+          }
+          timeout = 1;
+      } else if (timeout != 0 && consecutive_polls) {
+          if (verbose > 1 && consecutive_polls >= MAX_POLLS) {
+              fprintf(stderr, "%s: got %d consecutive polls\n", __func__, consecutive_polls);
+          }
+          consecutive_polls = 0;
       }
-      consecutive_polls = 0;
-    }
 
 #ifdef HAVE_PSELECT
-    struct timespec ts;
-    struct timespec *tsp = NULL;
+      struct timespec ts;
+      struct timespec *tsp = NULL;
 
-    if ( timeout >= 0 ) {
-      ts.tv_sec  = timeout / 1000;
-      ts.tv_nsec = 1000000 * (long( timeout ) % 1000);
-      tsp = &ts;
-    }
-
-    int ret = ::pselect( max_fd + 1, &read_fds, NULL, NULL, tsp, &empty_sigset );
-#else
-    struct timeval tv;
-    struct timeval *tvp = NULL;
-    sigset_t old_sigset;
-
-    if ( timeout >= 0 ) {
-      tv.tv_sec  = timeout / 1000;
-      tv.tv_usec = 1000 * (long( timeout ) % 1000);
-      tvp = &tv;
-    }
-
-    int ret = sigprocmask( SIG_SETMASK, &empty_sigset, &old_sigset );
-    if ( ret != -1 ) {
-      ret = ::select( max_fd + 1, &read_fds, NULL, NULL, tvp );
-      if (ret == -1) {
-          int errorNr = WSAGetLastError();
-          char* errorStr = strerror(errorNr);
-          return ret;
+      if ( timeout >= 0 ) {
+        ts.tv_sec  = timeout / 1000;
+        ts.tv_nsec = 1000000 * (long( timeout ) % 1000);
+        tsp = &ts;
       }
-      sigprocmask( SIG_SETMASK, &old_sigset, NULL );
-    }
+
+      int ret = ::pselect( max_fd + 1, &read_fds, NULL, NULL, tsp, &empty_sigset );
+#else
+      sigset_t old_sigset;
+
+      int ret = sigprocmask(SIG_SETMASK, &empty_sigset, &old_sigset);
+      if (ret != -1) {
+          std::vector<HANDLE> objectsToWait;
+          objectsToWait.reserve(eventHandles.size() + waitableHandles.size());
+          objectsToWait.insert(objectsToWait.end(), eventHandles.begin(), eventHandles.end());
+          objectsToWait.insert(objectsToWait.end(), waitableHandles.begin(), waitableHandles.end());
+
+          DWORD rc = WSAWaitForMultipleEvents(objectsToWait.size(), objectsToWait.data(), FALSE, timeout, FALSE);
+          if (rc == WSA_WAIT_FAILED) {
+              int errorNr = WSAGetLastError();
+              fprintf(stderr, "%s: got error 0x%.8X from WSAWaitForMultipleEvents()\n", __func__, errorNr);
+              return -1;
+          }
+
+          if (rc == WSA_WAIT_TIMEOUT) {
+              ret = 0;
+          } else {
+              ret = 1;
+          }
+          sigprocmask(SIG_SETMASK, &old_sigset, NULL);
+      }
 #endif
 
-    if ( ret == 0 || ( ret == -1 && errno == EINTR ) ) {
-      /* Look for and report Cygwin select() bug. */
-      if ( ret == 0 ) {
-	for ( int fd = 0; fd <= max_fd; fd++ ) {
-	  if ( FD_ISSET( fd, &read_fds ) ) {
-	    fprintf( stderr, "select(): nfds = 0 but read fd %d is set\n", fd );
-	  }
-	}
-      }
-      /* The user should process events as usual. */
-      FD_ZERO( &read_fds );
-      ret = 0;
-    }
+      freeze_timestamp();
 
-    freeze_timestamp();
-
-    return ret;
+      return ret;
   }
 
-  bool read( int fd )
-#if FD_ISSET_IS_CONST
-    const
-#endif
-  {
-    assert( FD_ISSET( fd, &all_fds ) );
-    return FD_ISSET( fd, &read_fds );
+  bool isSocketReady( SOCKET socket ) {
+      WSANETWORKEVENTS networkEvents = {};
+      for (std::vector<SOCKET>::size_type idx = 0; idx < socketHandles.size(); idx++) {
+          if (socketHandles[idx] == socket && idx < eventHandles.size()) {
+              if (WSAEnumNetworkEvents(socket, eventHandles[idx], &networkEvents) == SOCKET_ERROR) {
+                  throw Network::WSAException("WSAEnumNetworkEvents", WSAGetLastError());
+              }
+          }
+      }
+
+      return (networkEvents.lNetworkEvents & (FD_READ | FD_CONNECT | FD_CLOSE)) != 0;
   }
 
   /* This method consumes a signal notification. */
@@ -317,20 +337,19 @@ private:
 
   static void handle_signal( int signum );
 
-  int max_fd;
-
   /* We assume writes to got_signal are atomic, though we also try to mask out
      concurrent signal handlers. */
   volatile sig_atomic_t got_signal[ MAX_SIGNAL_NUMBER + 1 ];
 
-  fd_set all_fds, read_fds;
-
   sigset_t empty_sigset;
 
-  static fd_set dummy_fd_set;
   static sigset_t dummy_sigset;
   int consecutive_polls;
   static unsigned int verbose;
+
+  std::vector<SOCKET> socketHandles;
+  std::vector<WSAEVENT> eventHandles;
+  std::vector<HANDLE> waitableHandles;
 };
 
 #endif
