@@ -65,6 +65,14 @@
 
 #include "tncon.h"
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
+#endif
+
+#ifndef DISABLE_NEWLINE_AUTO_RETURN
+#define DISABLE_NEWLINE_AUTO_RETURN 0x8
+#endif
+
 using std::wstring;
 
 void STMClient::resume( void )
@@ -120,17 +128,7 @@ void STMClient::init( void )
   //    exit( 1 );
   //}
 
-  BOOL rc = SetConsoleOutputCP(CP_UTF8);
-  if(!rc) {
-      fprintf(stderr, "SetConsoleOutputCP error: 0x%.8X\n", GetLastError());
-      exit(1);
-  }
-
-  rc = SetConsoleCP(CP_UTF8);
-  if(!rc) {
-      fprintf(stderr, "SetConsoleCP error: 0x%.8X\n", GetLastError());
-      exit(1);
-  }
+  enterRawConsoleMode();
 
   /* Put terminal in application-cursor-key mode */
   swrite( STDOUT_FILENO, display.open().c_str() );
@@ -237,6 +235,8 @@ void STMClient::shutdown( void )
     fputs( "\n\nmosh did not shut down cleanly. Please note that the\n"
 	   "mosh-server process may still be running on the server.\n", stderr );
   }
+
+  exitRawConsoleMode();
 }
 
 void STMClient::main_init( void )
@@ -457,6 +457,69 @@ bool STMClient::process_resize( void ) {
     overlays.get_prediction_engine().reset();
 
     return true;
+}
+
+void STMClient::enterRawConsoleMode()
+{
+    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD dwInputMode;
+
+    GetConsoleMode(hInput, &dwInputMode);
+
+    input_mode_attributes_saved = dwInputMode;
+    dwInputMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
+    dwInputMode |= ENABLE_WINDOW_INPUT;
+
+    if( !SetConsoleMode(hInput, dwInputMode) ) {
+        fatal_assert(!"SetConsoleMode() error");
+        exit(1);
+    }
+
+    HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwOutputMode;
+
+    GetConsoleMode(hOutput, &dwOutputMode);
+
+    output_mode_attributes_saved = dwOutputMode;
+    dwOutputMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+    if( !SetConsoleMode(hOutput, dwOutputMode) ) {
+        fatal_assert(!"SetConsoleMode() error");
+        exit(1);
+    }
+
+    output_cp_saved = GetConsoleOutputCP();
+    BOOL rc = SetConsoleOutputCP(CP_UTF8);
+    if(!rc) {
+        fprintf(stderr, "SetConsoleOutputCP error: 0x%.8X\n", GetLastError());
+        exit(1);
+    }
+
+    input_cp_saved = GetConsoleCP();
+    rc = SetConsoleCP(CP_UTF8);
+    if(!rc) {
+        fprintf(stderr, "SetConsoleCP error: 0x%.8X\n", GetLastError());
+        exit(1);
+    }
+}
+
+void STMClient::exitRawConsoleMode()
+{
+    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode_attributes_saved);
+    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), input_mode_attributes_saved);
+
+    if (output_cp_saved) {
+        if(!SetConsoleOutputCP(output_cp_saved)) {
+            fprintf(stderr, "SetConsoleOutputCP error: 0x%.8X\n", GetLastError());
+            exit(1);
+        }
+    }
+
+    if (input_cp_saved) {
+        if(!SetConsoleCP(input_cp_saved)) {
+            fprintf(stderr, "SetConsoleCP error: 0x%.8X\n", GetLastError());
+            exit(1);
+        }
+    }
 }
 
 bool STMClient::main( void )
