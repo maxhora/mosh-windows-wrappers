@@ -70,6 +70,11 @@ private:
   bool clean_shutdown;
   unsigned int verbose;
 
+  DWORD input_mode_attributes_saved = 0;
+  DWORD output_mode_attributes_saved = 0;
+  unsigned int input_cp_saved = 0;
+  unsigned int output_cp_saved = 0;
+
   void main_init( void );
   void process_network_input( void );
   bool process_user_input( void );
@@ -84,6 +89,9 @@ private:
   }
 
   void resume( void ); /* restore state after SIGCONT */
+
+  void enterRawConsoleMode();
+  void exitRawConsoleMode();
 
 public:
   STMClient( const char *s_ip, const char *s_port, const char *s_key, const char *predict_mode, unsigned int s_verbose, const char *predict_overwrite )

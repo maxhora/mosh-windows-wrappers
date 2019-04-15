@@ -5,31 +5,6 @@
 #include "libinterface.h"
 #include "stmclient.h"
 
-void setupConsole() {
-    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD dwInputMode;
-
-    GetConsoleMode(hInput, &dwInputMode);
-
-    dwInputMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
-    dwInputMode |= ENABLE_WINDOW_INPUT;
-
-    if( !SetConsoleMode(hInput, dwInputMode) ) {
-        fatal_assert(!"SetConsoleMode() error");
-        exit(1);
-    }
-
-    HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD dwOutputMode;
-
-    GetConsoleMode(hOutput, &dwOutputMode);
-    dwOutputMode |= 0x0004 | 0x0008;
-    if( !SetConsoleMode(hOutput, dwOutputMode) ) {
-        fatal_assert(!"SetConsoleMode() error");
-        exit(1);
-    }
-}
-
 /**
  *
  * @param ip                bind to this IP
@@ -42,8 +17,6 @@ void setupConsole() {
  * @return
  */
 int startMoshClient(char *ip, char *desiredPort, char *key, char *predictMode, int verbose, char *predictOverwrite) {
-
-    setupConsole();
 
     /* For security, make sure we don't dump core */
     Crypto::disable_dumping_core();
