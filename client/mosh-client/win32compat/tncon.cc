@@ -37,6 +37,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <windows.h>
+#include <wincon.h>
 //#include "ansiprsr.h"
 #include "tncon.h"
 //#include "tnnet.h"
@@ -212,16 +213,23 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen, const std::fu
 
 			modKey = GetModifierKey(dwControlKeyState);
 			if (InputRecord.Event.KeyEvent.bKeyDown) {
-				int n = WideCharToMultiByte(
-					CP_UTF8,
-					0,
-					&(InputRecord.Event.KeyEvent.uChar.UnicodeChar),
-					1,
-					(LPSTR)octets,
-					20,
-					NULL,
-					NULL);
+			    int n;
 
+			    if( (dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0 && InputRecord.Event.KeyEvent.wVirtualKeyCode == 0x36 ) {
+                                // handle Ctrl+^
+                                *octets = '\x1E';
+                                n = 1;
+                            } else {
+                                n = WideCharToMultiByte(
+                                        CP_UTF8,
+                                        0,
+                                        &(InputRecord.Event.KeyEvent.uChar.UnicodeChar),
+                                        1,
+                                        (LPSTR) octets,
+                                        20,
+                                        NULL,
+                                        NULL);
+                            }
                 //if (pParams->fLocalEcho)
                 //	ConWriteString((char *)octets, n);
 
@@ -800,7 +808,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen, const std::fu
 							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF12_KEY, strlen(SHIFT_CTRL_PF12_KEY), 0);
 						break;
 					default:
-						if (strcmp((char *) octets, "")) {
+						if(n > 0) { //(strcmp((char *) octets, "")) {
 							if ((dwControlKeyState & LEFT_ALT_PRESSED) || (dwControlKeyState & RIGHT_ALT_PRESSED)) {								
 								memset(tmp_buf, 0, sizeof(tmp_buf));
 								tmp_buf[0] = '\x1b';

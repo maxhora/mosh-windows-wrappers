@@ -554,16 +554,12 @@ bool STMClient::main( void )
 
       /* poll for events */
       /* network->fd() can in theory change over time */
-      sel.clear_fds();
+      sel.clear_handles();
       std::vector< int > fd_list( network->fds() );
-      for ( std::vector< int >::const_iterator it = fd_list.begin();
-        it != fd_list.end();
-        it++ ) {
-        sel.add_fd( *it );
+      for ( std::vector< int >::const_iterator it = fd_list.begin(); it != fd_list.end(); it++ ) {
+          sel.add_socket(*it);
       }
-      //sel.add_fd( STDIN_FILENO );
-      DWORD inputEventCount = 0;
-      GetNumberOfConsoleInputEvents(inputHandle, &inputEventCount);
+      sel.add_waitable_handle( inputHandle );
 
       int active_fds = sel.select( wait_time );
       if ( active_fds < 0 ) {
@@ -576,7 +572,7 @@ bool STMClient::main( void )
       for ( std::vector< int >::const_iterator it = fd_list.begin();
         it != fd_list.end();
         it++ ) {
-        if ( sel.read( *it ) ) {
+        if ( sel.isSocketReady( *it ) ) {
           /* packet received from the network */
           /* we only read one socket each run */
           network_ready_to_read = true;
@@ -587,17 +583,15 @@ bool STMClient::main( void )
         process_network_input();
       }
 
+      DWORD inputEventCount = 0;
+      GetNumberOfConsoleInputEvents(inputHandle, &inputEventCount);
       if ( inputEventCount && !process_user_input()/*sel.read( STDIN_FILENO ) && !process_user_input( STDIN_FILENO )*/ ) { // input from the user needs to be fed to the network
-        if ( !network->has_remote_addr() ) {
-          break;
-        } else if ( !network->shutdown_in_progress() ) {
-          overlays.get_notification_engine().set_notification_string( wstring( L"Exiting..." ), true );
-          network->start_shutdown();
-        }
-      }
-
-      if ( sel.signal( SIGWINCH ) && !process_resize() ) { /* resize */
-        return false;
+          if (!network->has_remote_addr()) {
+              break;
+          } else if (!network->shutdown_in_progress()) {
+              overlays.get_notification_engine().set_notification_string(wstring(L"Exiting..."), true);
+              network->start_shutdown();
+          }
       }
 
       /*if ( sel.signal( SIGCONT ) ) {
