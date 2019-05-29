@@ -50,16 +50,12 @@
 #define ENUM_LF 1
 #define ENUM_CR 2
 
-bool gbVTAppMode;
+bool gbVTAppMode = true;
 BOOL isAnsiParsingRequired = false;
 char *glob_out = NULL;
 int glob_outlen = 0;
 int glob_space = 0;
 unsigned char  NAWSSTR[] = { "\xff\xfa\x1f\x00\x00\x00\x00\xff\xf0" };
-extern int ScreenY;
-extern int ScreenX;
-extern int ScrollTop;
-extern int ScrollBottom;
 char tmp_buf[30];
 
 typedef struct _TelParams
