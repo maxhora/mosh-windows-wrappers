@@ -243,7 +243,8 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
 	  frame.append_silent_move( bottom_margin, 0 );
 
 	  /* scroll */
-	  frame.append( lines_scrolled, '\n' );
+      snprintf( tmp, 64, "\033[%dS", lines_scrolled);
+      frame.append( tmp );
 
 	  /* reset scrolling region */
 	  frame.append( "\033[r" );
