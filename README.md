@@ -1,16 +1,9 @@
-Command mosh is an alternative wrapper to mosh-client command that plays
-well with socks proxies.
+Windows native port of original [Mobile Shell](https://github.com/mobile-shell/mosh) project.  
+MinGW 32-bit and 64-bit toolchains are supported to build `mosh-client`. No dependencies on MSYS or Cygwin.  
+`mosh-server` Windows native build is not supported.
 
-It only exists because of [this bug in original mosh](https://github.com/mobile-shell/mosh/issues/285), which make mosh ignore `ProxyCommand` that I use to access restricted sites via socks proxy.
+Instead of [original Perl based wrapper](https://github.com/mobile-shell/mosh/blob/335e3869b7af59314255a121ec7ed0f6309b06e7/scripts/mosh.pl) around `mosh-client` this port maintains [C#](mosh_cs) and [GoLang](mosh_go) wrappers.
 
-This `mosh` allows to use mosh in setups where initial ssh connection to start mosh server can only be done via socks5 proxy specified as `ALL_PROXY=socks5://host:port`.
-
-Supported environment variables:
-
-* `MOSH_USER` — default user when doing ssh connection;
-* `MOSH_PORTS` - port or colon-separated port range to start mosh-server with.
-
-Authentication is performed using ssh-agent, its socket is expected to be available at `SSH_AUTH_SOCK`.
 
 
 ### Build Protobuf with MinGW
